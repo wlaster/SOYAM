@@ -99,14 +99,14 @@ jobs:
           $VERSION = $env:GITHUB_REF -replace 'refs/tags/v', ''
           if ($VERSION -eq $env:GITHUB_REF) { $VERSION = "manual" }
           "VERSION=$VERSION" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Compress-Archive -Path "src\build\windows\x64\runner\Release\*" -DestinationPath "yayma-windows-x64-$VERSION.zip"
+          Compress-Archive -Path "src\build\windows\x64\runner\Release\*" -DestinationPath "soyam-windows-x64-$VERSION.zip"
         shell: powershell
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: windows_x64_release
-          path: yayma-windows-*.zip
+          path: soyam-windows-*.zip
 
       - name: Build Installer
         run: |
@@ -118,7 +118,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows_x64_installer
-          path: dist\yayma-windows-setup-*.exe
+          path: dist\soyam-windows-setup-*.exe
 
   build-android:
     runs-on: ubuntu-latest
@@ -250,7 +250,7 @@ jobs:
           if [ "$VERSION" == "$GITHUB_REF" ]; then VERSION="manual"; fi
           APP="src/build/macos/Build/Products/Release/yayma.app"
           test -d "$APP"
-          hdiutil create -volname "YAYMA" -srcfolder "$APP" -ov -format UDZO "yayma-macos-arm64-${VERSION}.dmg"
+          hdiutil create -volname "SOYAM" -srcfolder "$APP" -ov -format UDZO "yayma-macos-arm64-${VERSION}.dmg"
 
       - name: Upload
         uses: actions/upload-artifact@v4

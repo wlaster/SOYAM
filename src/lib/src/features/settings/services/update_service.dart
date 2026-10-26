@@ -88,7 +88,7 @@ class UpdateService {
   static Future<void> cleanupDownloadedApk() async {
     try {
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/yayma-update.apk');
+      final file = File('${dir.path}/soyam-update.apk');
       if (file.existsSync()) {
         await file.delete();
       }
@@ -127,14 +127,17 @@ class UpdateService {
     );
   }
 
-  static Future<List<ApkAsset>> _fetchReleaseApks(String repo, String tag) async {
+  static Future<List<ApkAsset>> _fetchReleaseApks(
+    String repo,
+    String tag,
+  ) async {
     final client = HttpClient();
     try {
       final request = await client.getUrl(
         Uri.parse('https://api.github.com/repos/$repo/releases/tags/$tag'),
       );
       request.headers.set('Accept', 'application/vnd.github.v3+json');
-      request.headers.set('User-Agent', 'yayma-app');
+      request.headers.set('User-Agent', 'soyam-app');
       final response = await request.close();
       if (response.statusCode != 200) {
         throw UpdateException(
@@ -188,14 +191,14 @@ class UpdateService {
     final client = HttpClient();
     try {
       final request = await client.getUrl(asset.url);
-      request.headers.set('User-Agent', 'yayma-app');
+      request.headers.set('User-Agent', 'soyam-app');
       final response = await request.close();
       if (response.statusCode != 200) {
         throw HttpException('HTTP ${response.statusCode}');
       }
 
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/yayma-update.apk');
+      final file = File('${dir.path}/soyam-update.apk');
       if (file.existsSync()) {
         await file.delete();
       }

@@ -957,7 +957,7 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _AboutAppCard extends StatelessWidget {
-  static const String _repoUrl = 'https://github.com/DarkPlayOff/YAYMA';
+  static const String _repoUrl = 'https://github.com/wlaster/SOYAM';
 
   final FutureSignal<String> versionSignal;
 
@@ -1072,7 +1072,7 @@ class _AboutAppCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'YAYMA',
+                      'SOYAM',
                       style: TextStyle(
                         color: cs.onSurface,
                         fontSize: isNarrow ? 24 : 30,
@@ -1083,7 +1083,7 @@ class _AboutAppCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Yet Another Yandex Music App',
+                      'Клиент Яндекс Музыки',
                       style: TextStyle(
                         color: cs.onSurfaceVariant,
                         fontSize: isNarrow ? 13 : 14,
@@ -1154,7 +1154,7 @@ class _AboutAppCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'YAYMA — независимый проект с открытым исходным кодом и не '
+                  'SOYAM — независимый проект с открытым исходным кодом и не '
                   'связан с Яндексом.',
                   style: TextStyle(
                     color: cs.onSurfaceVariant.withValues(alpha: 0.8),

@@ -46,7 +46,7 @@ class SystemTrayManager with TrayListener, WindowListener {
 
     trayManager.addListener(this);
     await trayManager.setIcon('assets/icons/tray_icon.ico');
-    await trayManager.setToolTip('YAYMA');
+    await trayManager.setToolTip('SOYAM');
 
     // Rebuild the context menu whenever playback state changes so the pause
     // item reflects it ("Pause" while playing, "Resume" while paused).

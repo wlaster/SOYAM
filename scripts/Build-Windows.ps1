@@ -43,15 +43,7 @@ try {
     Invoke-Checked 'flutter_rust_bridge_codegen' @('generate')
     Invoke-Checked 'cargo' @('test', '--manifest-path', 'rust/Cargo.toml', '--locked', 'lyrics::')
     Invoke-Checked 'flutter' @('build', 'windows', '--release')
-    $release = Join-Path $repoRoot 'src/build/windows/x64/runner/Release'
-    $dist = Join-Path $repoRoot 'dist'
-    New-Item -ItemType Directory -Force $dist | Out-Null
-    $portable = Join-Path $dist 'YAYMA-Windows'
-    New-Item -ItemType Directory -Force $portable | Out-Null
-    Copy-Item -Path (Join-Path $release '*') -Destination $portable -Recurse -Force
-    Compress-Archive -Path (Join-Path $portable '*') -DestinationPath (Join-Path $dist 'yayma-windows-lyrics.zip') -Force
-    Write-Output "Ready: $portable\yayma.exe"
-    Write-Output "Portable archive: $dist\yayma-windows-lyrics.zip"
+    & (Join-Path $PSScriptRoot 'Package-Windows.ps1')
 } finally {
     $env:RUSTUP_TOOLCHAIN = $previousToolchain
     Pop-Location

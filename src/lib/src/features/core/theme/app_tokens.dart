@@ -1,4 +1,4 @@
-/// Central MD3-Expressive shape & spacing tokens for YAYMA's custom shell.
+/// Central MD3-Expressive shape & spacing tokens for SOYAM's custom shell.
 ///
 /// Use these instead of magic numbers so surfaces stay on one token system
 /// (extra-large dialog corners, pill buttons, consistent 8dp-based spacing).

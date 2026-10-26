@@ -125,7 +125,7 @@ class MyApp extends StatelessWidget {
         final theme = _buildTheme(scheme2026);
 
         return MaterialApp(
-          title: 'YAYMA',
+          title: 'SOYAM',
           debugShowCheckedModeBanner: false,
           theme: theme,
           builder: (context, child) {

@@ -1,5 +1,5 @@
 {
-  description = "YAYMA - Yet Another Yandex Music App";
+  description = "SOYAM - Yandex Music client";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -11,7 +11,7 @@
       forAllSystems = nixpkgs.lib.genAttrs systems;
 
       version = "2.5.2";
-      # URL: https://github.com/DarkPlayOff/YAYMA/releases/download/v${version}/yayma-linux-x64-${version}.tar.gz
+      # URL: https://github.com/wlaster/SOYAM/releases/download/v${version}/yayma-linux-x64-${version}.tar.gz
       # Bump `version` and re-run `nix flake lock --update-input nixpkgs` + `nix store prefetch-file <url>`
       # to get the new sha256.
       srcHash = "sha256-vuozwtQsRJdCmg3WIiZn/Gt7GnvQwYbGToWzhunbAwM=";
@@ -26,7 +26,7 @@
             inherit version;
 
             src = pkgs.fetchurl {
-              url = "https://github.com/DarkPlayOff/YAYMA/releases/download/v${version}/yayma-linux-x64-${version}.tar.gz";
+              url = "https://github.com/wlaster/SOYAM/releases/download/v${version}/yayma-linux-x64-${version}.tar.gz";
               sha256 = srcHash;
             };
 
@@ -73,8 +73,8 @@
             '';
 
             meta = with pkgs.lib; {
-              description = "Yet Another Yandex Music Client";
-              homepage = "https://github.com/DarkPlayOff/YAYMA";
+              description = "SOYAM - Yandex Music client";
+              homepage = "https://github.com/wlaster/SOYAM";
               license = licenses.gpl3Plus;
               mainProgram = "yayma";
               platforms = [ "x86_64-linux" ];

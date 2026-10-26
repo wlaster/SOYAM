@@ -55,7 +55,17 @@ class AppInit {
   /// so moving without migration would log every user out and orphan
   /// downloaded tracks.
   static Future<Directory> _resolveDataDir() async {
-    final support = await getApplicationSupportDirectory();
+    final Directory support;
+    final appData = Platform.environment['APPDATA'];
+    final legacy = Platform.isWindows && appData != null
+        ? Directory('$appData/darkplayoff.yayma.app/yayma')
+        : null;
+    if (legacy != null && File('${legacy.path}/yamusic_v2.db').existsSync()) {
+      // Reuse the existing account, settings and offline cache after rebranding.
+      support = legacy;
+    } else {
+      support = await getApplicationSupportDirectory();
+    }
     await _migrateLegacyDataDir(support);
     return support;
   }
@@ -117,7 +127,7 @@ class AppInit {
       builder: YaymaAudioHandler.new,
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'io.github.darkplayoff.yayma.playback',
-        androidNotificationChannelName: 'YAYMA Playback',
+        androidNotificationChannelName: 'SOYAM Playback',
         androidNotificationOngoing: true,
         androidShowNotificationBadge: true,
         androidNotificationIcon: 'drawable/ic_notification',

@@ -15,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const APP_AGENT: &str = "YAYMA/2.5.2 (https://github.com/DarkPlayOff/YAYMA)";
+const APP_AGENT: &str = "SOYAM/2.5.2 (https://github.com/wlaster/SOYAM)";
 static CATALOG_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     let builder = reqwest::Client::builder();
     #[cfg(target_os = "windows")]

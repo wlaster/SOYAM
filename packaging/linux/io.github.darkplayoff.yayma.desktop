@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=YAYMA
+Name=SOYAM
 GenericName=Music Player
-Comment=Yet Another Yandex Music Client
+Comment=SOYAM - Yandex Music client
 Exec=yayma
 Icon=io.github.darkplayoff.yayma
 Terminal=false

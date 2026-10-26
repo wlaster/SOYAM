@@ -1,12 +1,11 @@
-# <img src="src/assets/icons/logo.svg" width="48" align="middle" alt="YAYMA" /> YAYMA (Yet Another Yandex Music App)
+# <img src="src/assets/icons/logo.svg" width="48" align="middle" alt="SOYAM" /> SOYAM
 
-![License](https://img.shields.io/github/license/DarkPlayOff/YAYMA)
-![Release](https://img.shields.io/github/v/release/DarkPlayOff/YAYMA)
-![Downloads](https://img.shields.io/github/downloads/DarkPlayOff/YAYMA/total)
+![License](https://img.shields.io/github/license/wlaster/SOYAM)
+![Release](https://img.shields.io/github/v/release/wlaster/SOYAM)
+![Downloads](https://img.shields.io/github/downloads/wlaster/SOYAM/total)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-lightgrey)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/DarkPlayOff/YAYMA)
 
-Альтернативный клиент для Яндекс Музыки
+Альтернативный клиент Яндекс Музыки на Flutter и Rust. Основная проверенная сборка — Windows x64.
 
 <table>
   <tr>
@@ -18,15 +17,32 @@
 
 ## Предупреждение
 
-**YAYMA** основан на [YaMusic](https://github.com/yamusic/yamusic) и использует неофициальное API, не предназначенное для публичного использования. Проект находится в стадии активной разработки. Пользуйтесь на свой страх и риск. Проект написан с помощью ИИ.
+**SOYAM** — форк [YAYMA](https://github.com/DarkPlayOff/YAYMA). Приложение основано на [YaMusic](https://github.com/yamusic/yamusic) и использует неофициальное API, не предназначенное для публичного использования. Проект находится в стадии активной разработки. Пользуйтесь на свой страх и риск. Проект написан с помощью ИИ.
 
 ## Возможности
 
+- **Воспроизведение**: Моя волна, поиск, библиотека, альбомы, плейлисты, скачивание треков и выбор качества звука.
+- **Рекомендации**: настройка «Меньше ИИ» синхронизируется с аккаунтом Яндекс Музыки.
+- **Исполнители**: отдельные счётчики слушателей Яндекс Музыки и Spotify. При недоступности сервиса отображается прочерк; Spotify может требовать VPN.
 - **Приватность**: никакой аналитики и слежки со стороны клиента
 - **Тексты песен**: Яндекс Музыка, LRCLIB, Lyrics.ovh и Genius; выбор включённых источников прямо в панели текста. Тексты с таймкодами следуют воспроизведению и перемотке, обычные прокручиваются вручную. BetterLyrics и YouLyPlus доступны как дополнительные источники в настройках.
 - **Интеграция с системой**: управление из панели задач Windows, глобальные горячие клавиши
 
+## Установка Windows x64
+
+Скачайте портативный ZIP `soyam-windows-x64-<версия>-portable.zip` из [Releases](https://github.com/wlaster/SOYAM/releases), распакуйте **весь архив** в отдельную папку и запустите `soyam.exe`. DLL, папка `data` и остальные файлы должны оставаться рядом с программой. Для обновления закройте приложение перед заменой файлов.
+
+Портативная версия не требует установщика. Данные аккаунта и кэш хранятся в профиле Windows, отдельно от папки программы. При обновлении с YAYMA существующая папка данных используется повторно.
+
+## Обновления
+
+Приложение проверяет последний опубликованный стабильный релиз **только** в [wlaster/SOYAM](https://github.com/wlaster/SOYAM/releases). Тег релиза должен иметь вид `v2.5.3`, а версия приложения задаётся в `src/pubspec.yaml`. Изменения в ветке `master` сами по себе не считаются релизом. Черновики и предварительные релизы не предлагаются как стабильные обновления.
+
+На Windows уведомление открывает страницу релиза для скачивания. При отсутствии опубликованных релизов или недоступности GitHub обновление не предлагается.
+
 ## Благодарности ❤️
+
+- [DarkPlayOff](https://github.com/DarkPlayOff/YAYMA) — исходный проект YAYMA
 
 - [Vyfor](https://github.com/vyfor) — за исходный TUI-клиент [YaMusic](https://github.com/yamusic/yamusic) и библиотеку [yandex-music-rs](https://github.com/vyfor/yandex-music-rs) для работы с API Яндекса
 - [LrcLib](https://lrclib.net), [BetterLyrics](https://github.com/better-lyrics/better-lyrics), [YouLyPlus](https://github.com/ibratabian17/YouLyPlus) — за базы текстов песен
@@ -34,7 +50,7 @@
 
 ## Локальная сборка Windows и проверка текстов
 
-См. [инструкцию](docs/windows-build.md). Проверить доступность источников с вашего подключения можно командой `powershell -File scripts/Test-LyricsSources.ps1`.
+См. [инструкцию](docs/windows-build.md). Полная сборка: `powershell -File scripts/Build-Windows.ps1`. Упаковка готовой Release-сборки с библиотеками MSVC x64: `powershell -File scripts/Package-Windows.ps1`. Скрипт проверяет SHA-256 каждого файла внутри ZIP и создаёт файл `.zip.sha256`. Проверить доступность источников с вашего подключения можно командой `powershell -File scripts/Test-LyricsSources.ps1`.
 
 ## Лицензия
 

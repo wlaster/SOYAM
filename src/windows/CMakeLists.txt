@@ -7,7 +7,7 @@ set(CMAKE_LINKER "lld-link" CACHE FILEPATH "Linker" FORCE)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "yayma")
+set(BINARY_NAME "soyam")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.

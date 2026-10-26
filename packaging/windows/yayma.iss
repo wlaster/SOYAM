@@ -1,13 +1,13 @@
-; Inno Setup script for YAYMA (Windows installer).
+; Inno Setup script for SOYAM (Windows installer).
 ; Build locally:  iscc packaging\windows\yayma.iss
 ; The Release build output (src\build\windows\x64\runner\Release) must exist first
-; (its yayma.exe already carries the version from src\pubspec.yaml, baked in by
+; (its soyam.exe already carries the version from src\pubspec.yaml, baked in by
 ; Flutter's build via Runner.rc's FLUTTER_VERSION_* macros).
 
-#define AppName "YAYMA"
-#define AppPublisher "DarkPlayOff"
-#define AppURL "https://github.com/DarkPlayOff/YAYMA"
-#define AppExeName "yayma.exe"
+#define AppName "SOYAM"
+#define AppPublisher "wlaster"
+#define AppURL "https://github.com/wlaster/SOYAM"
+#define AppExeName "soyam.exe"
 ; Must match the AUMID passed to SetCurrentProcessExplicitAppUserModelID in
 ; src\rust\src\audio\smtc.rs. Windows resolves the name shown in the media
 ; flyout (SMTC) through this property on the Start Menu shortcut, so it is
@@ -46,7 +46,7 @@ DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#AppExeName}
 OutputDir=..\..\dist
-OutputBaseFilename=yayma-windows-setup-{#AppVersion}
+OutputBaseFilename=soyam-windows-setup-{#AppVersion}
 SetupIconFile=..\..\src\windows\runner\resources\app_icon.ico
 Compression=lzma2
 SolidCompression=yes

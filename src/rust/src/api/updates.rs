@@ -46,12 +46,13 @@ fn is_newer_version(current: &str, latest: &str) -> bool {
 
 pub async fn check_for_updates() -> Option<AppUpdateInfoDto> {
     let client = reqwest::Client::builder()
-        .user_agent("yayma-app")
+        .user_agent("soyam-app")
+        .timeout(std::time::Duration::from_secs(15))
         .build()
         .ok()?;
 
     let res = client
-        .get("https://api.github.com/repos/DarkPlayOff/YAYMA/releases/latest")
+        .get("https://api.github.com/repos/wlaster/SOYAM/releases/latest")
         .header("Accept", "application/vnd.github.v3+json")
         .send()
         .await
@@ -78,4 +79,18 @@ pub async fn check_for_updates() -> Option<AppUpdateInfoDto> {
         url: release.html_url,
         has_update,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_newer_version;
+
+    #[test]
+    fn compares_release_versions_numerically() {
+        assert!(is_newer_version("2.5.2+1", "v2.5.3"));
+        assert!(is_newer_version("2.9.0", "v2.10.0"));
+        assert!(is_newer_version("2.5.2", "v3.0.0"));
+        assert!(!is_newer_version("2.5.2+1", "v2.5.2"));
+        assert!(!is_newer_version("2.5.3", "v2.5.2"));
+    }
 }

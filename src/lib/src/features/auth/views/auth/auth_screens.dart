@@ -261,7 +261,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 24),
                             const Text(
-                              'YAYMA',
+                              'SOYAM',
                               style: TextStyle(
                                 fontSize: 32,
                                 fontWeight: FontWeight.bold,
@@ -284,9 +284,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               browserButton,
                             ],
                             Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 24,
-                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 24),
                               child: Row(
                                 children: [
                                   const Expanded(child: Divider()),
@@ -480,9 +478,7 @@ class _YandexLoginDialogState extends State<YandexLoginDialog> {
         height: 800,
         child: Column(
           children: [
-            Expanded(
-              child: WebViewWidget(controller: _controller),
-            ),
+            Expanded(child: WebViewWidget(controller: _controller)),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
@@ -648,18 +644,16 @@ class _YandexDeviceLoginDialogState extends State<YandexDeviceLoginDialog> {
 
   void _openBrowser() {
     final url = _verificationUrl ?? 'https://ya.ru/device';
-    unawaited(
-      () async {
-        try {
-          final uri = Uri.parse(url);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-        } on Object catch (e) {
-          debugPrint('Error launching browser: $e');
+    unawaited(() async {
+      try {
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
         }
-      }(),
-    );
+      } on Object catch (e) {
+        debugPrint('Error launching browser: $e');
+      }
+    }());
   }
 
   @override
@@ -726,9 +720,7 @@ class _YandexDeviceLoginDialogState extends State<YandexDeviceLoginDialog> {
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: theme.colorScheme.outlineVariant,
-              ),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
             ),
             child: Text(
               _userCode ?? '',
@@ -774,10 +766,7 @@ class _YandexDeviceLoginDialogState extends State<YandexDeviceLoginDialog> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const M3ECircularWavyProgressIndicator(
-                strokeWidth: 2,
-                size: 16,
-              ),
+              const M3ECircularWavyProgressIndicator(strokeWidth: 2, size: 16),
               const SizedBox(width: 12),
               Text(
                 'Ожидание ввода кода на сайте',
@@ -813,10 +802,7 @@ class _YandexDeviceLoginDialogState extends State<YandexDeviceLoginDialog> {
                 const SizedBox(height: 12),
                 const Text(
                   'Вход по коду устройства',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 const Divider(height: 32),
                 content,
@@ -844,10 +830,7 @@ class _YandexDeviceLoginDialogState extends State<YandexDeviceLoginDialog> {
                 const SizedBox(width: 12),
                 const Text(
                   'Вход по коду устройства',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 IconButton(

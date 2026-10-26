@@ -11,7 +11,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   HANDLE hMutex = ::CreateMutex(nullptr, TRUE, L"YandexMusicAppMutex_Unique_ID");
   if (::GetLastError() == ERROR_ALREADY_EXISTS) {
     // Try to find the existing window and bring it to the foreground
-    HWND existingApp = ::FindWindow(nullptr, L"YAYMA");
+    HWND existingApp = ::FindWindow(nullptr, L"SOYAM");
     if (existingApp) {
       ::ShowWindow(existingApp, SW_RESTORE);
       ::SetForegroundWindow(existingApp);
@@ -40,7 +40,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"YAYMA", origin, size)) {
+  if (!window.Create(L"SOYAM", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

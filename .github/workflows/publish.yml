@@ -45,7 +45,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: YAYMA ${{ github.ref_name }}
+          name: SOYAM ${{ github.ref_name }}
           body: ${{ steps.changelog.outputs.notes }}
           files: release_artifacts/*
           draft: false

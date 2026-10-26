@@ -17,7 +17,7 @@ static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
         .brotli(false)
         .connect_timeout(Duration::from_secs(3))
         .timeout(Duration::from_secs(6))
-        .user_agent("YAYMA/2.5.2 (https://github.com/DarkPlayOff/YAYMA)")
+        .user_agent("SOYAM/2.5.2 (https://github.com/wlaster/SOYAM)")
         .build()
         .expect("lyrics HTTP client")
 });
@@ -209,7 +209,7 @@ async fn search(
         .header("Accept-Encoding", "gzip")
         .header(
             "User-Agent",
-            "YAYMA/2.5.2 (https://github.com/DarkPlayOff/YAYMA)",
+            "SOYAM/2.5.2 (https://github.com/wlaster/SOYAM)",
         );
     if let Some(q) = query {
         req = req.query(&[("q", q)]);
@@ -371,7 +371,7 @@ pub async fn get_lyrics(
         .header("Accept-Encoding", "gzip")
         .header(
             "User-Agent",
-            "YAYMA/2.5.2 (https://github.com/DarkPlayOff/YAYMA)",
+            "SOYAM/2.5.2 (https://github.com/wlaster/SOYAM)",
         )
         .query(&[
             ("track_name", clean_title(title)),
