@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:m3e_core/m3e_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:webview_all/webview_all.dart';
+import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 
 class YandexIdView extends StatefulWidget {
   final bool fullscreen;
@@ -53,9 +54,7 @@ class _YandexIdViewState extends State<YandexIdView> {
   @override
   Widget build(BuildContext context) {
     if (!_isReady) {
-      return const Center(
-        child: M3ELoadingIndicator(),
-      );
+      return const Center(child: M3ELoadingIndicator());
     }
 
     if (widget.fullscreen) {
@@ -64,13 +63,19 @@ class _YandexIdViewState extends State<YandexIdView> {
           leading: const BackButton(),
           title: const Text('Управление аккаунтом'),
         ),
-        body: WebViewWidget(controller: _controller),
+        body: Padding(
+          padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding),
+          child: WebViewWidget(controller: _controller),
+        ),
       );
     }
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: WebViewWidget(controller: _controller),
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: WebViewWidget(controller: _controller),
+      ),
     );
   }
 }

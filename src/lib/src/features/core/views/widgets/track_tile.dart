@@ -11,6 +11,7 @@ import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
 import 'package:yayma/src/features/core/views/widgets/track_context_actions.dart';
 import 'package:yayma/src/features/core/views/widgets/track_elements.dart';
+import 'package:yayma/src/features/core/views/widgets/track_title.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 import 'package:yayma/src/rust/api/models.dart';
@@ -27,6 +28,7 @@ class CommonTrackTile extends StatefulWidget {
   final VoidCallback? onTitleTap;
   final EdgeInsetsGeometry? contentPadding;
   final String? albumId;
+  final double? artistFontSize;
 
   /// Cover for the sheet menu header on Android, when [leading] is
   /// not a cover (e.g. the track number in an album).
@@ -45,6 +47,7 @@ class CommonTrackTile extends StatefulWidget {
     this.onTitleTap,
     this.contentPadding,
     this.albumId,
+    this.artistFontSize,
     this.sheetCoverUrl,
   });
 
@@ -295,11 +298,16 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                             child: Row(
                               children: [
                                 if (widget.leading != null) ...[
-                                  _LeadingPlayingBadge(
-                                    trackId: widget.trackId,
-                                    child: _adjustLeading(
-                                      widget.leading!,
-                                      isNarrow,
+                                  Padding(
+                                    padding: EdgeInsets.only(
+                                      left: widget.leading is AppCover ? 20 : 0,
+                                    ),
+                                    child: _LeadingPlayingBadge(
+                                      trackId: widget.trackId,
+                                      child: _adjustLeading(
+                                        widget.leading!,
+                                        isNarrow,
+                                      ),
                                     ),
                                   ),
                                   SizedBox(width: isNarrow ? 12 : 16),
@@ -327,14 +335,6 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                                 onTap: widget.onTitleTap,
                                                 child: SignalBuilder(
                                                   builder: (context) {
-                                                    // No subscription while the hosting tab is hidden.
-                                                    final isCurrent =
-                                                        visibleSignal(
-                                                          context,
-                                                          currentTrackIdSignal,
-                                                        ) ==
-                                                        widget.trackId;
-
                                                     return ValueListenableBuilder<
                                                       bool
                                                     >(
@@ -348,24 +348,11 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                                           ) {
                                                             return Text(
                                                               widget.title,
-                                                              style: TextStyle(
-                                                                color: isCurrent
-                                                                    ? Theme.of(
-                                                                        context,
-                                                                      ).colorScheme.primary
-                                                                    : Theme.of(
-                                                                        context,
-                                                                      ).colorScheme.onSurface,
-                                                                fontWeight:
-                                                                    isCurrent
-                                                                    ? FontWeight
-                                                                          .bold
-                                                                    : FontWeight
-                                                                          .w400,
-                                                                fontSize:
-                                                                    isNarrow
-                                                                    ? 14
-                                                                    : 16,
+                                                              style: trackTitleStyle(
+                                                                context,
+                                                                weight:
+                                                                    FontWeight
+                                                                        .bold,
                                                                 decoration:
                                                                     isTitleHovered &&
                                                                         widget.onTitleTap !=
@@ -438,7 +425,9 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                       const SizedBox(height: 2),
                                       ArtistNamesWidget(
                                         artists: widget.artists,
-                                        fontSize: isNarrow ? 13 : 15,
+                                        fontSize:
+                                            widget.artistFontSize ??
+                                            (isNarrow ? 13 : 15),
                                       ),
                                     ],
                                   ),

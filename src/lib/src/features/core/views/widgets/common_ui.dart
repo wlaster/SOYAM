@@ -20,37 +20,38 @@ String formatDuration(int ms) {
 }
 
 /// Groups thousands with spaces: 1234567 -> "1 234 567".
-String formatCount(int value) {
+String formatCount(int value, {String separator = ' '}) {
   final digits = value.toString();
   final buffer = StringBuffer();
   final offset = digits.length % 3;
   if (offset > 0) buffer.write(digits.substring(0, offset));
   for (var i = offset; i < digits.length; i += 3) {
-    if (buffer.isNotEmpty) buffer.write(' ');
+    if (buffer.isNotEmpty) buffer.write(separator);
     buffer.write(digits.substring(i, i + 3));
   }
   return buffer.toString();
 }
 
-String _plural(int n, String one, String few, String many) {
-  final mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return many;
-  switch (n % 10) {
-    case 1:
-      return one;
-    case 2:
-    case 3:
-    case 4:
-      return few;
-    default:
-      return many;
-  }
+/// Spotify-style audience precision, localized for the Russian interface.
+String formatCompactAudience(int value) {
+  final (divisor, suffix) = switch (value) {
+    >= 999950000 => (1000000000, 'млрд'),
+    >= 999950 => (1000000, 'млн'),
+    >= 1000 => (1000, 'тыс.'),
+    _ => (1, ''),
+  };
+  if (divisor == 1) return value.toString();
+  final amount = (value / divisor)
+      .toStringAsFixed(1)
+      .replaceFirst(RegExp(r'\.0$'), '')
+      .replaceAll('.', ',');
+  return '$amount\u00a0$suffix';
 }
 
-/// "1 234 567 monthly listeners", or null when there is no data.
+/// Compact audience per month, or null when there is no data.
 String? formatMonthlyListeners(int? value) {
   if (value == null) return null;
-  return '${formatCount(value)} ${_plural(value, 'слушатель', 'слушателя', 'слушателей')} за месяц';
+  return '${formatCompactAudience(value)} в месяц';
 }
 
 /// Compact subtitle for artist cards: monthly listeners, falling back to likes.
@@ -58,7 +59,7 @@ String? formatArtistCardSubtitle({int? monthlyListeners, int? likesCount}) {
   final monthly = formatMonthlyListeners(monthlyListeners);
   if (monthly != null) return monthly;
   if (likesCount != null) {
-    return '${formatCount(likesCount)} ${_plural(likesCount, 'слушатель', 'слушателя', 'слушателей')}';
+    return '${formatCompactAudience(likesCount)} в любимых';
   }
   return null;
 }
@@ -150,29 +151,37 @@ class CommonSectionTitle extends StatelessWidget {
 }
 
 class CommonDetailHeader extends StatelessWidget {
-  final String type;
+  final String? type;
   final String title;
   final List<TrackArtistDto>? artists;
   final String? subtitle;
   final String? secondarySubtitle;
+  final Widget? subtitleWidget;
   final String? coverUrl;
   final double coverSize;
   final bool isCircle;
   final List<Widget>? actions;
   final Widget? titleTrailing;
+  final bool compactSpacing;
+  final double titleOffsetY;
+  final double actionsSpacing;
 
   const CommonDetailHeader({
-    required this.type,
     required this.title,
+    this.type,
     super.key,
     this.artists,
     this.subtitle,
     this.secondarySubtitle,
+    this.subtitleWidget,
     this.coverUrl,
     this.coverSize = 250,
     this.isCircle = false,
     this.actions,
     this.titleTrailing,
+    this.compactSpacing = false,
+    this.titleOffsetY = 0,
+    this.actionsSpacing = 12,
   });
 
   @override
@@ -187,15 +196,18 @@ class CommonDetailHeader extends StatelessWidget {
         ? (screenWidth - 80).clamp(150.0, 200.0)
         : coverSize;
 
-    final titleWidget = Text(
-      title,
-      textAlign: isNarrow ? TextAlign.center : TextAlign.start,
-      style: Theme.of(context).textTheme.displayMedium?.copyWith(
-        fontSize: isNarrow ? 32 : 48,
-        fontWeight: FontWeight.w900,
-        color: onSurface,
-        height: 1.05,
-        letterSpacing: -1.5,
+    final titleWidget = Transform.translate(
+      offset: Offset(0, titleOffsetY),
+      child: Text(
+        title,
+        textAlign: isNarrow ? TextAlign.center : TextAlign.start,
+        style: Theme.of(context).textTheme.displayMedium?.copyWith(
+          fontSize: isNarrow ? 32 : 48,
+          fontWeight: FontWeight.w900,
+          color: onSurface,
+          height: 1.05,
+          letterSpacing: -1.5,
+        ),
       ),
     );
 
@@ -205,15 +217,17 @@ class CommonDetailHeader extends StatelessWidget {
           : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          type.toUpperCase(),
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: onSurface.withValues(alpha: 0.55),
-            letterSpacing: 2,
-            fontWeight: FontWeight.bold,
+        if (type != null && type!.isNotEmpty) ...[
+          Text(
+            type!.toUpperCase(),
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: onSurface.withValues(alpha: 0.55),
+              letterSpacing: 2,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
+          const SizedBox(height: 8),
+        ],
         if (titleTrailing != null) ...[
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -229,8 +243,11 @@ class CommonDetailHeader extends StatelessWidget {
         ] else ...[
           titleWidget,
         ],
-        if (artists != null) ...[
-          const SizedBox(height: 12),
+        if (subtitleWidget != null) ...[
+          SizedBox(height: compactSpacing ? 8 : 12),
+          subtitleWidget!,
+        ] else if (artists != null) ...[
+          SizedBox(height: compactSpacing ? 8 : 12),
           ArtistNamesWidget(
             artists: artists!,
             fontSize: isNarrow ? 18 : 24,
@@ -238,7 +255,7 @@ class CommonDetailHeader extends StatelessWidget {
             alignment: isNarrow ? WrapAlignment.center : WrapAlignment.start,
           ),
         ] else if (subtitle != null) ...[
-          const SizedBox(height: 12),
+          SizedBox(height: compactSpacing ? 8 : 12),
           Text(
             subtitle!,
             textAlign: isNarrow ? TextAlign.center : TextAlign.start,
@@ -249,7 +266,7 @@ class CommonDetailHeader extends StatelessWidget {
           ),
         ],
         if (secondarySubtitle != null) ...[
-          const SizedBox(height: 8),
+          SizedBox(height: compactSpacing ? 4 : 8),
           Text(
             secondarySubtitle!,
             textAlign: isNarrow ? TextAlign.center : TextAlign.start,
@@ -257,10 +274,10 @@ class CommonDetailHeader extends StatelessWidget {
           ),
         ],
         if (actions != null) ...[
-          const SizedBox(height: 24),
+          SizedBox(height: compactSpacing ? 16 : 24),
           Wrap(
-            spacing: 12,
-            runSpacing: 12,
+            spacing: actionsSpacing,
+            runSpacing: actionsSpacing,
             alignment: isNarrow ? WrapAlignment.center : WrapAlignment.start,
             children: actions!,
           ),
@@ -269,7 +286,10 @@ class CommonDetailHeader extends StatelessWidget {
     );
 
     return Padding(
-      padding: EdgeInsets.all(isNarrow ? 20 : 40),
+      padding: EdgeInsets.symmetric(
+        horizontal: context.horizontalPadding,
+        vertical: isNarrow ? 20 : 40,
+      ),
       child: isNarrow
           ? Column(
               children: [
@@ -304,6 +324,27 @@ class CommonDetailHeader extends StatelessWidget {
             ),
     );
   }
+}
+
+class VolumeStateIcon extends StatelessWidget {
+  final Color? color;
+  final double size;
+  const VolumeStateIcon({super.key, this.color, this.size = 18});
+  @override
+  Widget build(BuildContext context) => SignalBuilder(
+    builder: (context) {
+      final volume = playerVolumeSignal.value;
+      return Icon(
+        volume <= 0
+            ? Icons.volume_off_rounded
+            : volume < 50
+            ? Icons.volume_down_rounded
+            : Icons.volume_up_rounded,
+        size: size,
+        color: color,
+      );
+    },
+  );
 }
 
 class CommonVolumeSlider extends StatefulWidget {
@@ -487,7 +528,9 @@ class CommonDetailSliverLayout extends StatelessWidget {
     final scrollView = SmoothScroll(
       child: CustomScrollView(
         controller: controller,
-        physics: onRefresh != null ? const AlwaysScrollableScrollPhysics() : null,
+        physics: onRefresh != null
+            ? const AlwaysScrollableScrollPhysics()
+            : null,
         slivers: [
           SliverToBoxAdapter(child: header),
           ...slivers,
@@ -654,7 +697,8 @@ class _CommonProgressSliderState extends State<CommonProgressSlider> {
           final fontSize = widget.compact ? 11.0 : 12.0;
           // No accent subscription while the hosting tab is hidden.
           final accentColor =
-              widget.accentColor ?? visibleSignal<Color>(context, accentColorSignal);
+              widget.accentColor ??
+              visibleSignal<Color>(context, accentColorSignal);
           final onSurfaceVariant = Theme.of(
             context,
           ).colorScheme.onSurfaceVariant;

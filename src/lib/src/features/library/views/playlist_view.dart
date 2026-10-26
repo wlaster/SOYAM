@@ -15,6 +15,7 @@ import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/download_menu.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
+import 'package:yayma/src/features/core/views/widgets/track_list.dart';
 import 'package:yayma/src/features/core/views/widgets/track_tile.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
@@ -259,6 +260,7 @@ class _PlaylistContentState extends State<_PlaylistContent> {
       onRefresh: widget.refresh,
       header: CommonDetailHeader(
         type: 'Плейлист',
+        actionsSpacing: 6,
         title: widget.playlist.title,
         coverUrl: widget.playlist.coverUrl,
         titleTrailing: AppContextMenu<String>(
@@ -328,7 +330,7 @@ class _PlaylistContentState extends State<_PlaylistContent> {
                         side: BorderSide(color: cs.outlineVariant),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
                     IconButton(
                       onPressed: () => _handleUpload(context),
                       tooltip: 'Загрузить трек',
@@ -341,7 +343,7 @@ class _PlaylistContentState extends State<_PlaylistContent> {
                         side: BorderSide(color: cs.outlineVariant),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
                     DownloadTargetMenu(
                       compact: true,
                       isLoading: _isDownloading,
@@ -351,16 +353,21 @@ class _PlaylistContentState extends State<_PlaylistContent> {
                 ),
               ]
             : [
-                M3EButton.icon(
+                IconButton(
                   onPressed: () => PlaybackController.playPlaylist(
                     widget.playlist.uid.toString(),
                     widget.playlist.kind,
                   ),
+                  tooltip: 'Слушать',
                   icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Слушать'),
-                  size: M3EButtonSize.md,
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(56, 56),
+                    iconSize: 26,
+                    backgroundColor: cs.primary,
+                    foregroundColor: cs.onPrimary,
+                  ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 6),
                 M3EButton.icon(
                   onPressed: () => _handleUpload(context),
                   icon: const Icon(Icons.upload_rounded),
@@ -372,7 +379,7 @@ class _PlaylistContentState extends State<_PlaylistContent> {
                     foregroundColor: cs.onSurface,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 6),
                 DownloadTargetMenu(
                   compact: false,
                   isLoading: _isDownloading,
@@ -383,7 +390,12 @@ class _PlaylistContentState extends State<_PlaylistContent> {
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(40, 0, 40, 16),
+            padding: EdgeInsets.fromLTRB(
+              context.horizontalPadding,
+              0,
+              context.horizontalPadding,
+              16,
+            ),
             child: TextField(
               controller: widget.searchController,
               style: TextStyle(color: cs.onSurface),
@@ -437,13 +449,11 @@ class _PlaylistContentState extends State<_PlaylistContent> {
             ),
           )
         else if (searchActive)
-          SliverM3ESegmentedList(
-            haptic: M3EHapticFeedback.light,
+          AppSliverTrackList(
             itemCount: _localTracks.length,
             addAutomaticKeepAlives: false,
-            color: Colors.transparent,
             padding: EdgeInsets.symmetric(
-              horizontal: context.isNarrow ? 0 : 40,
+              horizontal: context.horizontalPadding,
               vertical: 4,
             ),
             itemBuilder: (context, index) {
@@ -464,49 +474,54 @@ class _PlaylistContentState extends State<_PlaylistContent> {
             },
           )
         else
-          SliverReorderableList(
-            itemBuilder: (context, index) {
-              final track = _localTracks[index];
-              return KeyedSubtree(
-                key: ValueKey('${track.id}_$index'),
-                child: _TrackTile(
-                  track: track,
-                  index: index,
-                  playlist: widget.playlist,
-                  dragEnabled: true,
-                  onRemove: () async {
-                    final success = await removeTrackFromPlaylistAction(
-                      widget.playlist.kind,
-                      track.id,
-                      track.albumId,
-                    );
-                    if (success) unawaited(widget.refresh());
-                  },
-                ),
-              );
-            },
-            itemCount: _localTracks.length,
-            onReorderItem: (oldIndex, originalNewIndex) async {
-              var newIndex = originalNewIndex;
-              setState(() {
-                if (newIndex > oldIndex) newIndex -= 1;
-                final item = _localTracks.removeAt(oldIndex);
-                _localTracks.insert(newIndex, item);
-              });
+          SliverPadding(
+            padding: EdgeInsets.symmetric(
+              horizontal: context.horizontalPadding,
+            ),
+            sliver: SliverReorderableList(
+              itemBuilder: (context, index) {
+                final track = _localTracks[index];
+                return KeyedSubtree(
+                  key: ValueKey('${track.id}_$index'),
+                  child: _TrackTile(
+                    track: track,
+                    index: index,
+                    playlist: widget.playlist,
+                    dragEnabled: true,
+                    onRemove: () async {
+                      final success = await removeTrackFromPlaylistAction(
+                        widget.playlist.kind,
+                        track.id,
+                        track.albumId,
+                      );
+                      if (success) unawaited(widget.refresh());
+                    },
+                  ),
+                );
+              },
+              itemCount: _localTracks.length,
+              onReorderItem: (oldIndex, originalNewIndex) async {
+                var newIndex = originalNewIndex;
+                setState(() {
+                  if (newIndex > oldIndex) newIndex -= 1;
+                  final item = _localTracks.removeAt(oldIndex);
+                  _localTracks.insert(newIndex, item);
+                });
 
-              final track = _localTracks[newIndex];
-              final success = await moveTrackInPlaylistAction(
-                widget.playlist.kind,
-                oldIndex,
-                newIndex,
-                track.id,
-                track.albumId,
-              );
+                final track = _localTracks[newIndex];
+                final success = await moveTrackInPlaylistAction(
+                  widget.playlist.kind,
+                  oldIndex,
+                  newIndex,
+                  track.id,
+                  track.albumId,
+                );
 
-              if (!success) {
-                unawaited(widget.refresh());
-              }
-            },
+                if (!success) {
+                  unawaited(widget.refresh());
+                }
+              },
+            ),
           ),
       ],
     );

@@ -154,6 +154,10 @@ pub async fn play_playlist(ctx: &AppContext, _uid: String, kind: u32) {
     let _ = ctx.audio.tx.send(AudioMessage::PlayPlaylist(kind)).await;
 }
 
+pub async fn play_artist(ctx: &AppContext, artist_id: String) {
+    let _ = ctx.audio.tx.send(AudioMessage::PlayArtist(artist_id)).await;
+}
+
 pub async fn play_album(ctx: &AppContext, album_id: u32) {
     let _ = ctx.audio.tx.send(AudioMessage::PlayAlbum(album_id)).await;
 }

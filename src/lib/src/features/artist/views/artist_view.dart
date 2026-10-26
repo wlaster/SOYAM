@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
 import 'package:m3e_core/m3e_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 import 'package:yayma/src/app/session.dart';
+import 'package:yayma/src/features/artist/views/widgets/artist_audience.dart';
 import 'package:yayma/src/features/core/providers/navigation_provider.dart';
 import 'package:yayma/src/features/core/providers/notification_provider.dart';
 import 'package:yayma/src/features/core/views/widgets/app_cover.dart';
@@ -14,6 +14,7 @@ import 'package:yayma/src/features/core/views/widgets/media_card.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 import 'package:yayma/src/features/core/views/widgets/smooth_scroll.dart';
 import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
+import 'package:yayma/src/features/core/views/widgets/track_list.dart';
 import 'package:yayma/src/features/core/views/widgets/track_tile.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
@@ -45,6 +46,7 @@ class _ArtistViewState extends State<ArtistView> {
   late final SmoothScrollController _scrollController;
   EffectCleanup? _refreshSub;
   var _lastRefreshSeen = 0;
+  var _audienceRevision = 0;
 
   @override
   void initState() {
@@ -117,6 +119,7 @@ class _ArtistViewState extends State<ArtistView> {
   }
 
   Future<void> _handleRefresh() async {
+    setState(() => _audienceRevision++);
     await Future.wait([_loadInitial(), refreshLikedArtists()]);
   }
 
@@ -209,65 +212,57 @@ class _ArtistViewState extends State<ArtistView> {
           context,
           likedArtistsSignal,
         ).any((likedArtist) => likedArtist.id == artist.id);
-        final isAndroid = Platform.isAndroid;
-        final monthlyText = formatMonthlyListeners(artist.monthlyListeners);
         final likesText = artist.likesCount != null
-            ? '${formatCount(artist.likesCount!)} в любимых'
+            ? '${formatCompactAudience(artist.likesCount!)} в любимых'
             : null;
 
         return CommonDetailSliverLayout(
           controller: _scrollController,
           onRefresh: _handleRefresh,
           header: CommonDetailHeader(
-            type: 'Артист',
+            compactSpacing: true,
+            titleOffsetY: -8,
             title: artist.name,
-            subtitle: monthlyText ?? likesText,
-            secondarySubtitle: monthlyText != null ? likesText : null,
+            subtitleWidget: ArtistAudience(
+              key: ValueKey((artist.id, _audienceRevision)),
+              artistId: artist.id,
+              yandexListeners: artist.monthlyListeners,
+            ),
+            secondarySubtitle: likesText,
             coverUrl: artist.coverUrl,
             coverSize: 200,
             isCircle: true,
             actions: [
-              if (isAndroid)
-                IconButton(
-                  onPressed: () =>
-                      unawaited(_toggleArtistLike(artist, isLiked)),
-                  tooltip: isLiked ? 'В любимых' : 'В любимые',
-                  icon: Icon(
-                    isLiked
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                  ),
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(64, 56),
-                    iconSize: 26,
-                    backgroundColor: isLiked
-                        ? cs.primary
-                        : cs.onSurface.withValues(alpha: 0.1),
-                    foregroundColor: isLiked ? cs.onPrimary : cs.onSurface,
-                    side: isLiked ? null : BorderSide(color: cs.outlineVariant),
-                  ),
-                )
-              else
-                M3EButton.icon(
-                  onPressed: () =>
-                      unawaited(_toggleArtistLike(artist, isLiked)),
-                  icon: Icon(
-                    isLiked
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                  ),
-                  label: Text(isLiked ? 'В любимых' : 'В любимые'),
-                  style: isLiked
-                      ? M3EButtonStyle.filled
-                      : M3EButtonStyle.outlined,
-                  size: M3EButtonSize.md,
-                  decoration: isLiked
-                      ? null
-                      : M3EButtonDecoration.styleFrom(
-                          backgroundColor: cs.onSurface.withValues(alpha: 0.1),
-                          foregroundColor: cs.onSurface,
-                        ),
+              IconButton(
+                onPressed: () =>
+                    unawaited(PlaybackController.playArtist(artist.id)),
+                tooltip: 'Слушать',
+                icon: const Icon(Icons.play_arrow_rounded),
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(56, 56),
+                  iconSize: 26,
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
                 ),
+              ),
+              IconButton(
+                onPressed: () => unawaited(_toggleArtistLike(artist, isLiked)),
+                tooltip: isLiked ? 'В любимых' : 'В любимые',
+                icon: Icon(
+                  isLiked
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                ),
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(56, 56),
+                  iconSize: 26,
+                  backgroundColor: isLiked
+                      ? cs.primary
+                      : cs.onSurface.withValues(alpha: 0.1),
+                  foregroundColor: isLiked ? cs.onPrimary : cs.onSurface,
+                  side: isLiked ? null : BorderSide(color: cs.outlineVariant),
+                ),
+              ),
             ],
           ),
           slivers: [
@@ -276,25 +271,21 @@ class _ArtistViewState extends State<ArtistView> {
                 child: CommonSectionTitle(
                   title: 'Альбомы',
                   padding: EdgeInsets.fromLTRB(
-                    context.isNarrow ? 16 : 40,
+                    context.horizontalPadding,
                     24,
-                    context.isNarrow ? 16 : 40,
+                    context.horizontalPadding,
                     16,
                   ),
                 ),
               ),
               SliverToBoxAdapter(
                 child: HorizontalShelf(
-                  // cover + title + subtitle + card paddings
                   height: (context.isNarrow ? 132.0 : 160.0) + 80,
-                  padding: EdgeInsets.symmetric(
-                    // 4/32 + 8 (internal card padding)
-                    horizontal: context.isNarrow ? 4 : 32,
-                  ),
                   itemCount: albums.length,
                   itemBuilder: (context, i) {
                     final album = albums[i];
                     return CommonMediaCard(
+                      contentPadding: const EdgeInsets.fromLTRB(0, 8, 16, 8),
                       title: album.title,
                       subtitle: album.year?.toString(),
                       coverUrl: album.coverUrl,
@@ -308,16 +299,19 @@ class _ArtistViewState extends State<ArtistView> {
             SliverToBoxAdapter(
               child: CommonSectionTitle(
                 title: 'Популярные треки (${_totalTracks.value})',
-                padding: const EdgeInsets.fromLTRB(40, 24, 40, 16),
+                padding: EdgeInsets.fromLTRB(
+                  context.horizontalPadding,
+                  24,
+                  context.horizontalPadding,
+                  16,
+                ),
               ),
             ),
-            SliverM3ESegmentedList(
-              haptic: M3EHapticFeedback.light,
+            AppSliverTrackList(
               itemCount: tracks.length,
               addAutomaticKeepAlives: false,
-              color: Colors.transparent,
               padding: EdgeInsets.symmetric(
-                horizontal: context.isNarrow ? 0 : 16,
+                horizontal: context.horizontalPadding,
                 vertical: 4,
               ),
               itemBuilder: (context, index) {

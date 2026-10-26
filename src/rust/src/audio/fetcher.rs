@@ -363,11 +363,7 @@ impl FetchState {
     /// `set_wave_session`.
     pub async fn await_task(
         &mut self,
-    ) -> Option<(
-        Vec<Track>,
-        Option<Session>,
-        Vec<WaveTrackEvent>,
-    )> {
+    ) -> Option<(Vec<Track>, Option<Session>, Vec<WaveTrackEvent>)> {
         self.await_task_timeout(Duration::from_secs(30)).await
     }
 
@@ -377,11 +373,7 @@ impl FetchState {
     pub async fn await_task_timeout(
         &mut self,
         timeout: Duration,
-    ) -> Option<(
-        Vec<Track>,
-        Option<Session>,
-        Vec<WaveTrackEvent>,
-    )> {
+    ) -> Option<(Vec<Track>, Option<Session>, Vec<WaveTrackEvent>)> {
         if self.task.is_none() {
             return None;
         }
@@ -400,11 +392,7 @@ impl FetchState {
 
     async fn await_task_inner(
         &mut self,
-    ) -> Option<(
-        Vec<Track>,
-        Option<Session>,
-        Vec<WaveTrackEvent>,
-    )> {
+    ) -> Option<(Vec<Track>, Option<Session>, Vec<WaveTrackEvent>)> {
         let task = self.task.take()?;
         let result = match task.await {
             Ok(result) => result,
@@ -434,10 +422,11 @@ impl FetchState {
                 failed_feedbacks,
             } => {
                 self.playlist_failure_requeues = 0;
-                Some(result.map_or(
-                    (vec![], None, failed_feedbacks),
-                    |(tracks, session)| (tracks, Some(session), Vec::new()),
-                ))
+                Some(
+                    result.map_or((vec![], None, failed_feedbacks), |(tracks, session)| {
+                        (tracks, Some(session), Vec::new())
+                    }),
+                )
             }
         }
     }

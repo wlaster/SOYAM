@@ -11,9 +11,11 @@ import 'package:yayma/src/features/core/views/widgets/app_context_menu.dart';
 import 'package:yayma/src/features/core/views/widgets/app_cover.dart';
 import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/download_menu.dart';
+import 'package:yayma/src/features/core/views/widgets/horizontal_scroll_fade.dart';
 import 'package:yayma/src/features/core/views/widgets/media_card.dart';
 import 'package:yayma/src/features/core/views/widgets/smooth_scroll.dart';
 import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
+import 'package:yayma/src/features/core/views/widgets/track_list.dart';
 import 'package:yayma/src/features/core/views/widgets/track_tile.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
@@ -198,9 +200,7 @@ class _LibraryViewState extends State<LibraryView>
           ),
           child: Row(
             children: [
-              const Expanded(
-                child: CommonPageTitle(title: 'Библиотека'),
-              ),
+              const Expanded(child: CommonPageTitle(title: 'Библиотека')),
               const SizedBox(width: 16),
               M3EButton.icon(
                 onPressed: () => _showCreatePlaylistDialog(context),
@@ -221,28 +221,32 @@ class _LibraryViewState extends State<LibraryView>
             ],
           ),
         ),
-        TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          padding: EdgeInsets.symmetric(horizontal: isNarrow ? 20 : 40),
-          indicator: UnderlineTabIndicator(
-            borderRadius: BorderRadius.circular(4),
-            borderSide: BorderSide(
-              width: 3,
-              color: Theme.of(context).colorScheme.primary,
+        HorizontalScrollFade(
+          child: TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            padding: EdgeInsets.symmetric(horizontal: isNarrow ? 20 : 40),
+            indicator: UnderlineTabIndicator(
+              borderRadius: BorderRadius.circular(4),
+              borderSide: BorderSide(
+                width: 3,
+                color: Theme.of(context).colorScheme.primary,
+              ),
             ),
+            splashBorderRadius: BorderRadius.circular(12),
+            labelColor: Theme.of(context).colorScheme.onSurface,
+            unselectedLabelColor: Theme.of(
+              context,
+            ).colorScheme.onSurfaceVariant,
+            dividerColor: Colors.transparent,
+            tabs: const [
+              Tab(text: 'Любимые треки'),
+              Tab(text: 'Плейлисты'),
+              Tab(text: 'Любимые альбомы'),
+              Tab(text: 'Любимые исполнители'),
+            ],
           ),
-          splashBorderRadius: BorderRadius.circular(12),
-          labelColor: Theme.of(context).colorScheme.onSurface,
-          unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
-          dividerColor: Colors.transparent,
-          tabs: const [
-            Tab(text: 'Любимые треки'),
-            Tab(text: 'Плейлисты'),
-            Tab(text: 'Любимые альбомы'),
-            Tab(text: 'Любимые исполнители'),
-          ],
         ),
         Expanded(
           child: TabBarView(
@@ -410,6 +414,11 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
         final isLoading = visibleSignal(context, isLibraryLoadingSignal);
         final loaded = visibleSignal(context, likedTracksLoadedSignal);
         final expected = visibleSignal(context, likedTracksExpectedSignal);
+        final downloadedTracks = visibleSignal(context, downloadedTracksSignal);
+        final allDownloaded =
+            tracks.isNotEmpty &&
+            tracks.every((track) => downloadedTracks.contains(track.id));
+        final downloadActionsWidth = allDownloaded ? 96.0 : 48.0;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,61 +475,68 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  SignalBuilder(
-                    builder: (context) {
-                      // No subscriptions while the tab is hidden.
-                      final isDownloading = visibleSignal(
-                        context,
-                        isDownloadingAllLikedTracksSignal,
-                      );
-                      final downloadedTracks = visibleSignal(
-                        context,
-                        downloadedTracksSignal,
-                      );
-                      final allDownloaded =
-                          tracks.isNotEmpty &&
-                          tracks.every((t) => downloadedTracks.contains(t.id));
+                  SizedBox(
+                    width: downloadActionsWidth,
+                    child: SignalBuilder(
+                      builder: (context) {
+                        // No subscriptions while the tab is hidden.
+                        final isDownloading = visibleSignal(
+                          context,
+                          isDownloadingAllLikedTracksSignal,
+                        );
+                        final downloadedTracks = visibleSignal(
+                          context,
+                          downloadedTracksSignal,
+                        );
+                        final allDownloaded =
+                            tracks.isNotEmpty &&
+                            tracks.every(
+                              (t) => downloadedTracks.contains(t.id),
+                            );
 
-                      if (allDownloaded) {
-                        return _LikedTracksCompletedActions(
+                        if (allDownloaded) {
+                          return _LikedTracksCompletedActions(
+                            onSelected: (mode) => unawaited(
+                              _downloadLikedTracks(context, tracks, mode),
+                            ),
+                            onPressed: () =>
+                                _showDeleteAllConfirmation(context, tracks),
+                            icon: const Icon(Icons.delete_sweep_rounded),
+                            tooltip: 'Удалить всё из кэша',
+                            style: IconButton.styleFrom(
+                              backgroundColor: cs.onSurface.withValues(
+                                alpha: 0.05,
+                              ),
+                              foregroundColor: cs.error,
+                            ),
+                          );
+                        }
+
+                        return _LikedTracksDownloadButton(
                           onSelected: (mode) => unawaited(
                             _downloadLikedTracks(context, tracks, mode),
                           ),
-                          onPressed: () =>
-                              _showDeleteAllConfirmation(context, tracks),
-                          icon: const Icon(Icons.delete_sweep_rounded),
-                          tooltip: 'Удалить всё из кэша',
+                          onPressed: isDownloading || tracks.isEmpty
+                              ? null
+                              : () {},
+                          icon: isDownloading
+                              ? const M3ECircularWavyProgressIndicator(
+                                  strokeWidth: 2,
+                                  size: 20,
+                                )
+                              : const Icon(Icons.download_rounded),
+                          tooltip: 'Скачать всё',
                           style: IconButton.styleFrom(
                             backgroundColor: cs.onSurface.withValues(
                               alpha: 0.05,
                             ),
-                            foregroundColor: cs.error,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary,
                           ),
                         );
-                      }
-
-                      return _LikedTracksDownloadButton(
-                        onSelected: (mode) => unawaited(
-                          _downloadLikedTracks(context, tracks, mode),
-                        ),
-                        onPressed: isDownloading || tracks.isEmpty
-                            ? null
-                            : () {},
-                        icon: isDownloading
-                            ? const M3ECircularWavyProgressIndicator(
-                                strokeWidth: 2,
-                                size: 20,
-                              )
-                            : const Icon(Icons.download_rounded),
-                        tooltip: 'Скачать всё',
-                        style: IconButton.styleFrom(
-                          backgroundColor: cs.onSurface.withValues(alpha: 0.05),
-                          foregroundColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
-                        ),
-                      );
-                    },
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -566,21 +582,16 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                           ),
                         ],
                       )
-                    : M3ESegmentedList.builder(
-                        haptic: M3EHapticFeedback.light,
+                    : AppTrackList.builder(
                         physics: const AlwaysScrollableScrollPhysics(),
                         itemCount: tracks.length,
                         addAutomaticKeepAlives: false,
                         cacheExtent: 500,
                         listPadding: const EdgeInsets.only(bottom: 140),
                         margin: EdgeInsets.symmetric(
-                          horizontal: isNarrow ? 0 : 40,
+                          horizontal: isNarrow ? 20 : 40,
                         ),
-                        color: Colors.transparent,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isNarrow ? 0 : 40,
-                          vertical: 8,
-                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 3),
                         itemBuilder: (context, index) {
                           final track = tracks[index];
                           return CommonTrackTile(
@@ -589,7 +600,15 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                             version: track.version,
                             artists: track.artists,
                             albumId: track.albumId,
-                            leading: AppCover(coverUrl: track.coverUrl),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            artistFontSize: isNarrow ? 14 : 16,
+                            leading: AppCover(
+                              coverUrl: track.coverUrl,
+                              size: isNarrow ? 52 : 72,
+                            ),
                             trailing: Text(
                               formatDuration(track.durationMs),
                               style: TextStyle(
@@ -839,6 +858,10 @@ class _LikedAlbumsTab extends StatelessWidget {
             itemBuilder: (context, index) {
               final album = albums[index];
               return CommonMediaCard(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 10,
+                ),
                 title: album.title,
                 artists: album.artists,
                 coverUrl: album.coverUrl,
@@ -906,6 +929,23 @@ class _LikedArtistsTab extends StatelessWidget {
           );
         }
 
+        var titleHeight = 0.0;
+        for (final artist in artists) {
+          final painter = TextPainter(
+            text: TextSpan(
+              text: artist.name,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontFamily: 'Google Sans',
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout(maxWidth: 124);
+          if (painter.height > titleHeight) titleHeight = painter.height;
+          painter.dispose();
+        }
         return AppRefreshIndicator(
           onRefresh: refreshLikedArtists,
           child: GridView.builder(
@@ -919,10 +959,10 @@ class _LikedArtistsTab extends StatelessWidget {
               140,
             ),
             gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: isNarrow ? 160 : 200,
+              maxCrossAxisExtent: isNarrow ? 160 : 180,
               mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: 0.75,
+              crossAxisSpacing: 8,
+              mainAxisExtent: 192 + titleHeight,
             ),
             itemCount: artists.length,
             itemBuilder: (context, index) {
@@ -930,7 +970,12 @@ class _LikedArtistsTab extends StatelessWidget {
               return Stack(
                 children: [
                   CommonMediaCard(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 10,
+                    ),
                     title: artist.name,
+                    titleMaxLines: null,
                     subtitle: formatArtistCardSubtitle(
                       monthlyListeners: artist.monthlyListeners,
                       likesCount: artist.likesCount,

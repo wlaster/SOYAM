@@ -17,6 +17,7 @@ import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/rust_cached_image.dart';
 import 'package:yayma/src/features/core/views/widgets/track_context_actions.dart';
 import 'package:yayma/src/features/core/views/widgets/track_elements.dart';
+import 'package:yayma/src/features/core/views/widgets/track_title.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 import 'package:yayma/src/features/playback/views/wave_view.dart';
 import 'package:yayma/src/rust/api/models.dart';
@@ -1131,12 +1132,9 @@ class _FullPlayerTrackInfo extends StatelessWidget {
                               : null,
                           child: _MarqueeTitle(
                             text: meta.title,
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontSize: compact ? 17 : 20,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.6,
-                              height: 1.1,
+                            style: trackTitleStyle(
+                              context,
+                              weight: FontWeight.w900,
                             ),
                           ),
                         ),

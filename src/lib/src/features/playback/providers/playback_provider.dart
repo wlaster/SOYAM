@@ -45,11 +45,14 @@ Future<void> initPlayback() {
   final future = _initPlaybackUnsafe();
   _initPlaybackFuture = future;
   unawaited(
-    future.then((_) {
-      if (identical(_initPlaybackFuture, future)) _initPlaybackFuture = null;
-    }, onError: (_) {
-      if (identical(_initPlaybackFuture, future)) _initPlaybackFuture = null;
-    }),
+    future.then(
+      (_) {
+        if (identical(_initPlaybackFuture, future)) _initPlaybackFuture = null;
+      },
+      onError: (_) {
+        if (identical(_initPlaybackFuture, future)) _initPlaybackFuture = null;
+      },
+    ),
   );
   return future;
 }
@@ -121,17 +124,15 @@ Future<void> _initPlaybackUnsafe() async {
           trackId,
         };
       case rust.AppEvent_TrackDownloadFinished(field0: final trackId):
-        downloadingTracksSignal.value = {
-          ...downloadingTracksSignal.value,
-        }..remove(trackId);
+        downloadingTracksSignal.value = {...downloadingTracksSignal.value}
+          ..remove(trackId);
         unawaited(refreshDownloadedTracks());
       case rust.AppEvent_TrackDownloadFailed(
         field0: final trackId,
         field1: final error,
       ):
-        downloadingTracksSignal.value = {
-          ...downloadingTracksSignal.value,
-        }..remove(trackId);
+        downloadingTracksSignal.value = {...downloadingTracksSignal.value}
+          ..remove(trackId);
         showAppError('Ошибка загрузки трека: $error');
       case _:
         break;
@@ -376,16 +377,19 @@ Future<ColorScheme?> _prepareCoverScheme(String url) {
   // The identity check guards against evicting a fresher entry inserted
   // for the same url.
   unawaited(
-    future.then((scheme) {
-      if (scheme == null &&
-          identical(_preparedCoverSchemes.peek(url), future)) {
-        final _ = _preparedCoverSchemes.remove(url);
-      }
-    }, onError: (_) {
-      if (identical(_preparedCoverSchemes.peek(url), future)) {
-        final _ = _preparedCoverSchemes.remove(url);
-      }
-    }),
+    future.then(
+      (scheme) {
+        if (scheme == null &&
+            identical(_preparedCoverSchemes.peek(url), future)) {
+          final _ = _preparedCoverSchemes.remove(url);
+        }
+      },
+      onError: (_) {
+        if (identical(_preparedCoverSchemes.peek(url), future)) {
+          final _ = _preparedCoverSchemes.remove(url);
+        }
+      },
+    ),
   );
   return future;
 }
@@ -399,11 +403,7 @@ Future<ColorScheme?> _extractCoverScheme(String url) async {
     if (path == null) return null;
 
     final file = File(path);
-    final paletteProvider = ResizeImage(
-      FileImage(file),
-      width: 32,
-      height: 32,
-    );
+    final paletteProvider = ResizeImage(FileImage(file), width: 32, height: 32);
     final scheme = await ColorScheme.fromImageProvider(
       provider: paletteProvider,
       brightness: Brightness.dark,
@@ -497,12 +497,7 @@ final EffectCleanup _vibePaletteEffect = effect(() {
       ...c(scheme.secondaryContainer),
       ...c(scheme.tertiaryContainer),
     ];
-    unawaited(
-      rust.setVibePalette(
-        ctx: ctx,
-        colors: Float32List.fromList(p),
-      ),
-    );
+    unawaited(rust.setVibePalette(ctx: ctx, colors: Float32List.fromList(p)));
   }
 });
 
@@ -592,6 +587,8 @@ class PlaybackController {
       );
   static Future<void> playPlaylist(String uid, int kind) =>
       runRustAction((ctx) => rust.playPlaylist(ctx: ctx, uid: uid, kind: kind));
+  static Future<void> playArtist(String artistId) =>
+      runRustAction((ctx) => rust.playArtist(ctx: ctx, artistId: artistId));
   static Future<void> playAlbum(int albumId) =>
       runRustAction((ctx) => rust.playAlbum(ctx: ctx, albumId: albumId));
   static Future<void> togglePlay() =>
@@ -639,6 +636,7 @@ class PlaybackController {
     }
     return confirmed;
   }
+
   static Future<void> toggleDislike({required String trackId}) =>
       runRustAction((ctx) => rust.toggleDislike(ctx: ctx, trackId: trackId));
 
@@ -653,9 +651,8 @@ class PlaybackController {
       );
   static Future<void> changeVolume(int volume) =>
       runRustAction((ctx) => rust.setVolume(ctx: ctx, volume: volume));
-  static Future<void> changeTransientVolumeGain(int gain) => runRustAction(
-    (ctx) => rust.setTransientVolumeGain(ctx: ctx, gain: gain),
-  );
+  static Future<void> changeTransientVolumeGain(int gain) =>
+      runRustAction((ctx) => rust.setTransientVolumeGain(ctx: ctx, gain: gain));
   static Future<void> seekTo(Duration duration) {
     // Optimistic update so the timeline stays at the new position even while
     // paused (progress events only tick during playback, and the seek echo

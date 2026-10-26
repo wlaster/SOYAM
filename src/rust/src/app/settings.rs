@@ -43,10 +43,6 @@ pub async fn load_persisted_settings(ctx: &AppContext) {
         ctx.core.api.set_quality(quality);
     }
 
-    if let Some(rpc_enabled) = parse_setting::<bool>(&settings, "discord_rpc") {
-        ctx.audio.signals.discord_rpc.set(rpc_enabled);
-    }
-
     let vibe_enabled = parse_setting::<bool>(&settings, "vibe_animation_enabled").unwrap_or(true);
     ctx.audio.signals.vibe_enabled.set(vibe_enabled);
 

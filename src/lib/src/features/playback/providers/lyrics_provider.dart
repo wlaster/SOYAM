@@ -9,18 +9,10 @@ sealed class LyricItem {
   LyricItem(this.time);
 }
 
-class LyricWord {
-  final String text;
-  final Duration start;
-  final Duration end;
-  LyricWord({required this.text, required this.start, required this.end});
-}
-
 class LyricLine extends LyricItem {
   final String text;
   final Duration duration;
-  final List<LyricWord>? words;
-  LyricLine(super.time, this.text, this.duration, {this.words});
+  LyricLine(super.time, this.text, this.duration);
 }
 
 class LyricTimer extends LyricItem {
@@ -33,8 +25,45 @@ class LyricTimer extends LyricItem {
 class LyricsResult {
   final List<LyricItem> items;
   final String providerName;
-  LyricsResult(this.items, this.providerName);
+  final bool isSynced;
+  LyricsResult(this.items, this.providerName, {this.isSynced = true});
 }
+
+const lyricsSources = <String, String>{
+  'auto': 'Авто · с синхронизацией',
+  'yandex': 'Яндекс Музыка',
+  'lrclib': 'LRCLIB',
+  'lyricsovh': 'Lyrics.ovh',
+  'genius': 'Genius',
+  'betterlyrics': 'BetterLyrics',
+  'youlyplus': 'YouLyPlus',
+};
+final FlutterSignal<String> lyricsSourceSignal = signal<String>('auto');
+final FlutterSignal<Set<String>> enabledLyricsSourcesSignal = signal(
+  <String>{},
+);
+
+void applyLyricsProviderSettings(List<LyricsProviderSettingDto> settings) {
+  enabledLyricsSourcesSignal.value = {
+    for (final provider in settings)
+      if (provider.enabled) provider.id,
+  };
+  if (lyricsSourceSignal.value != 'auto' &&
+      !enabledLyricsSourcesSignal.value.contains(lyricsSourceSignal.value)) {
+    lyricsSourceSignal.value = 'auto';
+  }
+  clearLyricsCache();
+}
+
+Future<void> refreshLyricsProviderSettings() async {
+  final settings = await runRustFetch(
+    (ctx) => getLyricsProviderSettings(ctx: ctx),
+    notifyErrors: false,
+  );
+  if (settings != null) applyLyricsProviderSettings(settings);
+}
+
+final FlutterSignal<int> _lyricsRevision = signal<int>(0);
 
 const int _maxLyricsCacheSize = 20;
 
@@ -51,86 +80,85 @@ final LruMap<String, FutureSignal<LyricsResult>> _lyricsCache = LruMap(
 /// Also call from logout to avoid leaking per-user data.
 void clearLyricsCache() {
   _lyricsCache.clear();
+  _lyricsRevision.value++;
+}
+
+void retryLyrics(String trackId) {
+  _lyricsCache.remove('${lyricsSourceSignal.value}|$trackId');
+  _lyricsRevision.value++;
 }
 
 FutureSignal<LyricsResult> lyricsSignal(String trackId) {
-  final existing = _lyricsCache[trackId];
+  _lyricsRevision.value;
+  final source = lyricsSourceSignal.value;
+  final cacheKey = '$source|$trackId';
+  final existing = _lyricsCache[cacheKey];
   if (existing != null) return existing;
   final created = futureSignal<LyricsResult>(() async {
     final result = await runRustFetch(
-      (ctx) => getLyrics(ctx: ctx, trackId: trackId),
+      (ctx) => getLyrics(
+        ctx: ctx,
+        trackId: trackId,
+        source: source == 'auto' ? null : source,
+      ),
     );
     if (result == null) return LyricsResult([], '');
-    return LyricsResult(_toLyricItems(result.lines), result.providerName);
+    return LyricsResult(
+      toLyricItems(result.lines),
+      result.providerName,
+      isSynced: result.lines.any((line) => line.startMs >= 0),
+    );
   });
-  _lyricsCache[trackId] = created;
+  _lyricsCache[cacheKey] = created;
   return created;
 }
 
-List<LyricItem> _toLyricItems(List<LyricsLineDto> lines) {
+List<LyricItem> toLyricItems(List<LyricsLineDto> lines) {
   if (lines.isEmpty) return [];
+  if (lines.every((line) => line.startMs < 0)) {
+    return lines
+        .map((line) => LyricLine(Duration.zero, line.text, Duration.zero))
+        .toList();
+  }
 
   final rawLines = lines
       .map(
-        (line) => (
-          time: Duration(milliseconds: line.startMs),
-          text: line.text,
-          words: line.words.isEmpty
-              ? null
-              : line.words
-                    .map(
-                      (w) => LyricWord(
-                        text: w.text,
-                        start: Duration(milliseconds: w.startMs),
-                        end: Duration(milliseconds: w.endMs),
-                      ),
-                    )
-                    .toList(),
-        ),
+        (line) => (time: Duration(milliseconds: line.startMs), text: line.text),
       )
       .toList();
 
   final result = <LyricItem>[];
 
-  if (rawLines.isNotEmpty && rawLines.first.time > const Duration(seconds: 5)) {
-    result.add(
-      LyricTimer(
-        const Duration(seconds: 1),
-        rawLines.first.time - const Duration(seconds: 2),
-      ),
-    );
+  if (rawLines.first.time > Duration.zero) {
+    result.add(LyricTimer(Duration.zero, rawLines.first.time));
   }
-
   for (var i = 0; i < rawLines.length; i++) {
     final current = rawLines[i];
-    final nextTime = (i + 1 < rawLines.length)
+    final nextTime = i + 1 < rawLines.length
         ? rawLines[i + 1].time
         : current.time + const Duration(seconds: 10);
-
-    final duration = nextTime - current.time;
-
-    if (duration > const Duration(seconds: 7)) {
-      const textDuration = Duration(seconds: 4);
-      result.add(
-        LyricLine(
-          current.time,
-          current.text,
-          textDuration,
-          words: current.words,
-        ),
-      );
-
-      final timerStart = current.time + textDuration;
-      final timerDuration =
-          duration - textDuration - const Duration(seconds: 1);
-
-      result.add(LyricTimer(timerStart, timerDuration));
+    if (current.text.trim().isEmpty) {
+      result.add(LyricTimer(current.time, nextTime - current.time));
     } else {
       result.add(
-        LyricLine(current.time, current.text, duration, words: current.words),
+        LyricLine(current.time, current.text, nextTime - current.time),
       );
     }
   }
-
   return result;
+}
+
+/// Binary search against the playback clock; also handles backward seeks.
+int activeLyricIndex(List<LyricItem> items, int positionMs) {
+  var lo = 0;
+  var hi = items.length;
+  while (lo < hi) {
+    final mid = (lo + hi) >> 1;
+    if (items[mid].time.inMilliseconds > positionMs) {
+      hi = mid;
+    } else {
+      lo = mid + 1;
+    }
+  }
+  return lo - 1;
 }

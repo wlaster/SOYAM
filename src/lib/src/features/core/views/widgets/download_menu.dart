@@ -22,7 +22,7 @@ class DownloadTargetMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isEnabled = enabled && !isLoading;
-    final child = compact
+    Widget buildButton(VoidCallback toggle) => compact
         ? IconButton(
             icon: isLoading
                 ? const M3ECircularWavyProgressIndicator(
@@ -30,7 +30,7 @@ class DownloadTargetMenu extends StatelessWidget {
                     size: 18,
                   )
                 : const Icon(Icons.download_rounded),
-            onPressed: isEnabled ? () {} : null,
+            onPressed: isEnabled ? toggle : null,
             tooltip: 'Скачать',
             style: IconButton.styleFrom(
               minimumSize: const Size(64, 56),
@@ -54,7 +54,7 @@ class DownloadTargetMenu extends StatelessWidget {
               backgroundColor: cs.onSurface.withValues(alpha: 0.1),
               foregroundColor: cs.onSurface,
             ),
-            onPressed: isEnabled ? () {} : null,
+            onPressed: isEnabled ? toggle : null,
           );
 
     return IgnorePointer(
@@ -73,7 +73,8 @@ class DownloadTargetMenu extends StatelessWidget {
           ),
         ],
         onSelected: onSelected,
-        child: IgnorePointer(child: child),
+        triggerBuilder: buildButton,
+        child: const SizedBox.shrink(),
       ),
     );
   }

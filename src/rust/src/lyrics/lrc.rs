@@ -11,9 +11,9 @@ use regex::Regex;
 use std::sync::LazyLock;
 
 static LINE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\[(\d+):(\d+\.\d+)\](.*)$").unwrap());
+    LazyLock::new(|| Regex::new(r"^\[(\d+):([0-5]?\d(?:\.\d+)?)\](.*)$").unwrap());
 static INLINE_WORD_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"<(\d+):(\d+\.\d+)>([^<]*)").unwrap());
+    LazyLock::new(|| Regex::new(r"<(\d+):([0-5]?\d(?:\.\d+)?)>([^<]*)").unwrap());
 
 fn parse_timestamp(minutes: &str, seconds: &str) -> f64 {
     minutes.parse().unwrap_or(0.0) * 60.0 + seconds.parse().unwrap_or(0.0)
@@ -26,26 +26,29 @@ pub fn has_inline_words(text: &str) -> bool {
     INLINE_WORD_RE.is_match(text)
 }
 
-/// Parses `text` into lines. Untimed text (no `[mm:ss.xx]` prefix at all,
-/// e.g. a plain-lyrics fallback with no sync data) yields no lines, since
-/// there's no timestamp to place it on the timeline.
+/// Untimed lyrics use start = -1 (start_ms = -1000 across the bridge).
+/// The UI displays these as a manually scrollable text without fake timing.
 pub fn parse(text: &str) -> Vec<ParsedLine> {
     let mut lines = Vec::new();
 
     for raw_line in text.lines() {
-        let Some(caps) = LINE_RE.captures(raw_line) else {
+        let mut rest = raw_line.trim();
+        let mut timestamps = Vec::new();
+        while let Some(caps) = LINE_RE.captures(rest) {
+            timestamps.push(parse_timestamp(&caps[1], &caps[2]));
+            rest = caps.get(3).unwrap().as_str().trim_start();
+        }
+        let Some(&start) = timestamps.first() else {
             continue;
         };
-        let start = parse_timestamp(&caps[1], &caps[2]);
-        let rest = caps[3].trim();
 
         let word_caps: Vec<_> = INLINE_WORD_RE.captures_iter(rest).collect();
         if word_caps.is_empty() {
-            lines.push(ParsedLine {
+            lines.extend(timestamps.into_iter().map(|start| ParsedLine {
                 start,
-                text: rest.to_string(),
+                text: rest.trim().to_string(),
                 words: Vec::new(),
-            });
+            }));
             continue;
         }
 
@@ -72,13 +75,34 @@ pub fn parse(text: &str) -> Vec<ParsedLine> {
             .map(|w| w.text.as_str())
             .collect::<Vec<_>>()
             .join(" ");
-        lines.push(ParsedLine {
-            start,
-            text: line_text,
-            words,
-        });
+        lines.extend(timestamps.into_iter().map(|line_start| {
+            ParsedLine {
+                start: line_start,
+                text: line_text.clone(),
+                words: words
+                    .iter()
+                    .map(|word| ParsedWord {
+                        text: word.text.clone(),
+                        start: word.start + (line_start - start),
+                        end: word.end + (line_start - start),
+                    })
+                    .collect(),
+            }
+        }));
     }
 
+    if lines.is_empty() {
+        return text
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !(line.starts_with('[') && line.ends_with(']')))
+            .map(|text| ParsedLine {
+                start: -1.0,
+                text: text.to_string(),
+                words: Vec::new(),
+            })
+            .collect();
+    }
     lines
 }
 
@@ -109,8 +133,31 @@ mod tests {
     }
 
     #[test]
-    fn drops_untimed_lines() {
+    fn repeated_time_tags_create_repeated_lines_at_their_real_times() {
+        let lines = parse("[00:12][01:24.50]Chorus");
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].start, 12.0);
+        assert_eq!(lines[1].start, 84.5);
+        assert!(lines.iter().all(|l| l.text == "Chorus"));
+    }
+
+    #[test]
+    fn preserves_untimed_lines_without_fabricating_timestamps() {
         let lines = parse("just plain text\nwith no timestamps\n");
-        assert!(lines.is_empty());
+        assert_eq!(lines.len(), 2);
+        assert!(
+            lines
+                .iter()
+                .all(|line| line.start == -1.0 && line.words.is_empty())
+        );
+    }
+
+    #[test]
+    fn accepts_integer_timestamps_and_skips_metadata() {
+        let lines = parse("[ar:Artist]\n[00:02]First\n[00:05.5]Second");
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].start, 2.0);
+        assert_eq!(lines[1].start, 5.5);
+        assert!(parse("[ar:Artist]\n\n").is_empty());
     }
 }

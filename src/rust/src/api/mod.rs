@@ -7,3 +7,7 @@ pub mod models;
 pub mod playback;
 pub mod simple;
 pub mod updates;
+
+pub mod artist_stats;
+
+pub mod recommendations;

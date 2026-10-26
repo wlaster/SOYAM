@@ -13,6 +13,7 @@ import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/hover_scale.dart';
 import 'package:yayma/src/features/core/views/widgets/quality_selector.dart';
 import 'package:yayma/src/features/core/views/widgets/track_elements.dart';
+import 'package:yayma/src/features/core/views/widgets/track_title.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 import 'package:yayma/src/rust/api/models.dart';
 
@@ -30,8 +31,9 @@ class PlayerBar extends StatelessWidget {
         final isHome = navState.section == AppSection.home;
 
         final useLyricsStyle = isHome && showLyrics;
-        final alpha = useLyricsStyle ? 0.5 : 0.9;
-        final blur = useLyricsStyle ? 0.0 : 2.0;
+        final blurEnabled = blurEffectsEnabledSignal.value;
+        final alpha = blurEnabled ? (useLyricsStyle ? 0.80 : 0.86) : 0.94;
+        const blur = 12.0;
 
         // Dynamic background color based on theme
         final barColor =
@@ -50,7 +52,7 @@ class PlayerBar extends StatelessWidget {
             }
 
             final accentColor = colorScheme.primary;
-            double coverSize = 75;
+            double coverSize = 72;
             double volumeWidth = 120;
 
             if (width < 1100) {
@@ -69,38 +71,41 @@ class PlayerBar extends StatelessWidget {
             return AnimatedContainer(
               duration: const Duration(milliseconds: 600),
               height: 100,
-              padding: const EdgeInsets.symmetric(horizontal: 24),
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              decoration: BoxDecoration(
-                color: barColor.withValues(alpha: alpha),
-                borderRadius: BorderRadius.circular(AppRadius.xl),
-                border: Border.all(
-                  color: colorScheme.onSurface.withValues(alpha: 0.08),
-                ),
-              ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadius.xl),
                 child: BackdropFilter(
-                  enabled: blurEffectsEnabledSignal.value && blur > 0,
+                  enabled: blurEnabled,
                   filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: _TrackInfo(coverSize: coverSize),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 600),
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    decoration: BoxDecoration(
+                      color: barColor.withValues(alpha: alpha),
+                      borderRadius: BorderRadius.circular(AppRadius.xl),
+                      border: Border.all(
+                        color: colorScheme.onSurface.withValues(alpha: 0.08),
                       ),
-                      Expanded(
-                        flex: 4,
-                        child: _PlayerControls(accentColor: accentColor),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: _VolumeAndQuality(
-                          accentColor: accentColor,
-                          volumeWidth: volumeWidth,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: _TrackInfo(coverSize: coverSize),
                         ),
-                      ),
-                    ],
+                        Expanded(
+                          flex: 4,
+                          child: _PlayerControls(accentColor: accentColor),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: _VolumeAndQuality(
+                            accentColor: accentColor,
+                            volumeWidth: volumeWidth,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -175,15 +180,11 @@ class _TrackInfoState extends State<_TrackInfo> {
                             valueListenable: _isCoverHovered,
                             builder: (context, hovered, _) {
                               return AnimatedOpacity(
-                                duration: const Duration(
-                                  milliseconds: 150,
-                                ),
+                                duration: const Duration(milliseconds: 150),
                                 opacity: hovered ? 1 : 0,
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withValues(
-                                      alpha: 0.45,
-                                    ),
+                                    color: Colors.black.withValues(alpha: 0.45),
                                     borderRadius: BorderRadius.circular(
                                       AppRadius.sm,
                                     ),
@@ -230,11 +231,8 @@ class _TrackInfoState extends State<_TrackInfo> {
                                 },
                                 child: Text(
                                   meta.title,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 17,
-                                    height: 1.15,
-                                    letterSpacing: -0.4,
+                                  style: trackTitleStyle(
+                                    context,
                                     decoration: hovered && meta.albumId != null
                                         ? TextDecoration.underline
                                         : null,
@@ -246,16 +244,10 @@ class _TrackInfoState extends State<_TrackInfo> {
                           ),
                         ),
                       ),
-                      TrackVersionWidget(
-                        version: meta.version,
-                        fontSize: 12,
-                      ),
+                      TrackVersionWidget(version: meta.version, fontSize: 12),
                     ],
                   ),
-                  ArtistNamesWidget(
-                    artists: meta.artists,
-                    maxLines: 1,
-                  ),
+                  ArtistNamesWidget(artists: meta.artists, maxLines: 1),
                 ],
               ),
             ),
@@ -297,104 +289,124 @@ class _PlayerControls extends StatelessWidget {
                   fit: BoxFit.scaleDown,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          Icons.lyrics_rounded,
-                          size: 20,
-                          color: showLyricsSignal.value
-                              ? accentColor
-                              : onSurfaceVariant,
-                        ),
-                        onPressed: () =>
-                            showLyricsSignal.value = !showLyricsSignal.value,
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.shuffle,
-                          size: 20,
-                          color: isShuffled ? accentColor : onSurfaceVariant,
-                        ),
-                        onPressed: PlaybackController.toggleShuffle,
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          isDisliked
-                              ? Icons.heart_broken
-                              : Icons.heart_broken_outlined,
-                          size: 20,
-                          color: isDisliked
-                              ? Colors.blueGrey
-                              : onSurfaceVariant,
-                        ),
-                        onPressed: () => trackId != null
-                            ? PlaybackController.toggleDislike(trackId: trackId)
-                            : null,
-                      ),
-                      const IconButton(
-                        icon: Icon(Icons.skip_previous_rounded, size: 28),
-                        onPressed: PlaybackController.prev,
-                      ),
-                      IconButton(
-                        iconSize: 48,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 48,
-                          minHeight: 48,
-                        ),
-                        icon: showBuffering
-                            ? M3ECircularWavyProgressIndicator(
-                                strokeWidth: 3,
-                                size: 40,
-                                color: accentColorSignal.value,
-                              )
-                            : AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 250),
-                                switchInCurve: Curves.easeOutBack,
-                                switchOutCurve: Curves.easeIn,
-                                transitionBuilder: (child, animation) {
-                                  return FadeTransition(
-                                    opacity: animation,
-                                    child: ScaleTransition(
-                                      scale: animation,
-                                      child: child,
-                                    ),
-                                  );
-                                },
-                                child: Icon(
-                                  isPlaying
-                                      ? Icons.pause_circle_filled_rounded
-                                      : Icons.play_circle_filled_rounded,
-                                  key: ValueKey<bool>(isPlaying),
+                    children:
+                        [
+                              IconButton(
+                                icon: Icon(
+                                  Icons.lyrics_rounded,
+                                  size: 20,
+                                  color: showLyricsSignal.value
+                                      ? accentColor
+                                      : onSurfaceVariant,
                                 ),
+                                onPressed: () => showLyricsSignal.value =
+                                    !showLyricsSignal.value,
                               ),
-                        onPressed: PlaybackController.togglePlay,
-                      ),
-                      const IconButton(
-                        icon: Icon(Icons.skip_next_rounded, size: 28),
-                        onPressed: PlaybackController.next,
-                      ),
-                      AnimatedLikeButton(
-                        isLiked: isLiked,
-                        size: 20,
-                        onTap: trackId != null
-                            ? () => PlaybackController.toggleLike(
-                                trackId: trackId,
-                              )
-                            : null,
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          repeatIcon,
-                          size: 20,
-                          color: repeatMode != RepeatModeDto.none
-                              ? accentColor
-                              : onSurfaceVariant,
-                        ),
-                        onPressed: PlaybackController.toggleRepeat,
-                      ),
-                      CommonQualitySelector(accentColor: accentColor),
-                    ],
+                              IconButton(
+                                icon: Icon(
+                                  Icons.shuffle,
+                                  size: 20,
+                                  color: isShuffled
+                                      ? accentColor
+                                      : onSurfaceVariant,
+                                ),
+                                onPressed: PlaybackController.toggleShuffle,
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  isDisliked
+                                      ? Icons.heart_broken
+                                      : Icons.heart_broken_outlined,
+                                  size: 20,
+                                  color: isDisliked
+                                      ? Colors.blueGrey
+                                      : onSurfaceVariant,
+                                ),
+                                onPressed: () => trackId != null
+                                    ? PlaybackController.toggleDislike(
+                                        trackId: trackId,
+                                      )
+                                    : null,
+                              ),
+                              const IconButton(
+                                icon: Icon(
+                                  Icons.skip_previous_rounded,
+                                  size: 28,
+                                ),
+                                onPressed: PlaybackController.prev,
+                              ),
+                              IconButton(
+                                iconSize: 48,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 48,
+                                  minHeight: 48,
+                                ),
+                                icon: showBuffering
+                                    ? M3ECircularWavyProgressIndicator(
+                                        strokeWidth: 3,
+                                        size: 40,
+                                        color: accentColorSignal.value,
+                                      )
+                                    : AnimatedSwitcher(
+                                        duration: const Duration(
+                                          milliseconds: 250,
+                                        ),
+                                        switchInCurve: Curves.easeOutBack,
+                                        switchOutCurve: Curves.easeIn,
+                                        transitionBuilder: (child, animation) {
+                                          return FadeTransition(
+                                            opacity: animation,
+                                            child: ScaleTransition(
+                                              scale: animation,
+                                              child: child,
+                                            ),
+                                          );
+                                        },
+                                        child: Icon(
+                                          isPlaying
+                                              ? Icons
+                                                    .pause_circle_filled_rounded
+                                              : Icons
+                                                    .play_circle_filled_rounded,
+                                          key: ValueKey<bool>(isPlaying),
+                                        ),
+                                      ),
+                                onPressed: PlaybackController.togglePlay,
+                              ),
+                              const IconButton(
+                                icon: Icon(Icons.skip_next_rounded, size: 28),
+                                onPressed: PlaybackController.next,
+                              ),
+                              AnimatedLikeButton(
+                                isLiked: isLiked,
+                                size: 20,
+                                onTap: trackId != null
+                                    ? () => PlaybackController.toggleLike(
+                                        trackId: trackId,
+                                      )
+                                    : null,
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  repeatIcon,
+                                  size: 20,
+                                  color: repeatMode != RepeatModeDto.none
+                                      ? accentColor
+                                      : onSurfaceVariant,
+                                ),
+                                onPressed: PlaybackController.toggleRepeat,
+                              ),
+                              CommonQualitySelector(accentColor: accentColor),
+                            ]
+                            .map(
+                              (control) => SizedBox(
+                                width: 48,
+                                height: 48,
+                                child: Center(child: control),
+                              ),
+                            )
+                            .toList(),
                   ),
                 ),
               ),
@@ -428,15 +440,8 @@ class _VolumeAndQuality extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           if (showVolume) ...[
-            Icon(
-              Icons.volume_up_rounded,
-              size: 18,
-              color: onSurfaceVariant,
-            ),
-            CommonVolumeSlider(
-              width: volumeWidth,
-              activeColor: accentColor,
-            ),
+            VolumeStateIcon(color: onSurfaceVariant),
+            CommonVolumeSlider(width: volumeWidth, activeColor: accentColor),
             const SizedBox(width: 8),
             const AudioDeviceButton(),
           ],

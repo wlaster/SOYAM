@@ -401,7 +401,8 @@ impl SimpleArtistDto {
             name: artist.name.take().unwrap_or_default(),
             cover_url: format_cover(artist.cover.and_then(|mut c| c.uri.take()), "600x600"),
             likes_count: artist.likes_count,
-            monthly_listeners: artist.ratings.map(|r| r.month),
+            // Ratings are chart positions, never audience counts.
+            monthly_listeners: None,
         }
     }
 }
@@ -683,4 +684,11 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for AppError {
             AppError::ApiError(s)
         }
     }
+}
+
+#[flutter_rust_bridge::frb(unignore)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpotifyArtistStatsDto {
+    pub monthly_listeners: Option<u64>,
+    pub url: Option<String>,
 }

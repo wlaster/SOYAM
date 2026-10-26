@@ -4,6 +4,7 @@ import 'package:m3e_core/m3e_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
+import 'package:yayma/src/features/core/views/widgets/horizontal_scroll_fade.dart';
 import 'package:yayma/src/features/core/views/widgets/smooth_scroll.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 import 'package:yayma/src/rust/api/models.dart';
@@ -81,10 +82,7 @@ class _AudioSettingsDialogState extends State<AudioSettingsDialog> {
                         padding: EdgeInsets.symmetric(horizontal: 20),
                         child: TabBarView(
                           physics: NeverScrollableScrollPhysics(),
-                          children: [
-                            _EqualizerView(),
-                            _EffectsView(),
-                          ],
+                          children: [_EqualizerView(), _EffectsView()],
                         ),
                       ),
                     ),
@@ -145,10 +143,7 @@ class _AudioSettingsDialogState extends State<AudioSettingsDialog> {
               height: 450,
               child: TabBarView(
                 physics: NeverScrollableScrollPhysics(),
-                children: [
-                  _EqualizerView(),
-                  _EffectsView(),
-                ],
+                children: [_EqualizerView(), _EffectsView()],
               ),
             ),
             actions: [
@@ -156,10 +151,7 @@ class _AudioSettingsDialogState extends State<AudioSettingsDialog> {
                 TextButton(
                   onPressed: () =>
                       unawaited(PlaybackController.resetEqualizer()),
-                  child: Text(
-                    'Сбросить',
-                    style: TextStyle(color: cs.error),
-                  ),
+                  child: Text('Сбросить', style: TextStyle(color: cs.error)),
                 ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
@@ -253,12 +245,14 @@ class _EqualizerView extends StatelessWidget {
 
                             if (!needsScroll) return content;
 
-                            return SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: SizedBox(
-                                width: minBandWidth * bandCount,
-                                height: constraints.maxHeight,
-                                child: content,
+                            return HorizontalScrollFade(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: SizedBox(
+                                  width: minBandWidth * bandCount,
+                                  height: constraints.maxHeight,
+                                  child: content,
+                                ),
                               ),
                             );
                           },
@@ -275,11 +269,7 @@ class _EqualizerView extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(
-    BuildContext context,
-    Color accent,
-    bool enabled,
-  ) {
+  Widget _buildHeader(BuildContext context, Color accent, bool enabled) {
     final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 16),
@@ -324,9 +314,8 @@ class _EqualizerView extends StatelessWidget {
           ),
           Switch(
             value: enabled,
-            onChanged: (val) => unawaited(
-              PlaybackController.setEqualizerEnabled(enabled: val),
-            ),
+            onChanged: (val) =>
+                unawaited(PlaybackController.setEqualizerEnabled(enabled: val)),
             activeThumbColor: accent,
           ),
         ],

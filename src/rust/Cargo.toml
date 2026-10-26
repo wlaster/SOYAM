@@ -8,6 +8,7 @@ name = "yayma"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
+flate2 = "1.1"
 
 mimalloc = { version = "0.1.52" }
 
@@ -16,6 +17,7 @@ tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "fs"] }
 reqwest = { version = "0.13.4", default-features = false, features = [
   "rustls",
   "brotli",
+  "gzip",
   "json",
   "http2",
   "multipart",
@@ -61,16 +63,18 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 parking_lot = "0.12.5"
 foldhash = "0.2.0"
 urlencoding = "2.1.3"
+unicode-normalization = "0.1"
 lofty = "0.25.1"
 bytes = "1.12.1"
 regex = "1.13.1"
 quick-xml = "0.41.0"
+scraper = "0.24"
 [target.'cfg(not(target_os = "android"))'.dependencies]
-discord-rich-presence = "1.1.0"
 wayclip-global-hotkey = "0.7"
 souvlaki = { git = "https://github.com/Sinono3/souvlaki", rev = "93ff3d1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
+reqwest = { version = "0.13.4", default-features = false, features = ["native-tls", "system-proxy", "charset"] }
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",

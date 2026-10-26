@@ -23,8 +23,9 @@ pub struct SmtcManager {
 impl SmtcManager {
     pub fn new(
         cmd_tx: mpsc::UnboundedSender<AudioMessage>,
-        #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
-        http_cache: std::sync::Arc<crate::storage::cache::HttpCache>,
+        #[cfg_attr(not(target_os = "windows"), allow(unused_variables))] http_cache: std::sync::Arc<
+            crate::storage::cache::HttpCache,
+        >,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         #[cfg(target_os = "windows")]
         unsafe {

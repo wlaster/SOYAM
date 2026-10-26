@@ -11,6 +11,7 @@ import 'package:yayma/src/features/core/views/widgets/quality_selector.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
 import 'package:yayma/src/features/core/views/widgets/track_elements.dart';
+import 'package:yayma/src/features/core/views/widgets/track_title.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 import 'package:yayma/src/rust/api/models.dart';
 
@@ -279,22 +280,12 @@ class _HomeTrackHeaderState extends State<_HomeTrackHeader> {
                               waitDuration: const Duration(milliseconds: 500),
                               child: Text(
                                 meta.title,
-                                style: TextStyle(
-                                  fontSize: widget.small
-                                      ? (widget.isNarrow ? 18 : 32)
-                                      : (widget.isNarrow ? 22 : 42),
-                                  fontWeight: FontWeight.w900,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface,
-                                  letterSpacing: -1,
-                                  height: 1.05,
+                                style: trackTitleStyle(
+                                  context,
+                                  weight: FontWeight.w900,
                                   decoration: hovered && meta.albumId != null
                                       ? TextDecoration.underline
                                       : null,
-                                  shadows: widget.isNarrow
-                                      ? null
-                                      : const [Shadow(blurRadius: 20)],
                                 ),
                                 maxLines: 1,
                                 softWrap: false,
@@ -540,7 +531,7 @@ class _HomeMainControls extends StatelessWidget {
                   ),
                   onPressed: () => unawaited(PlaybackController.prev()),
                 ),
-                SizedBox(width: small ? 16 : 24),
+                SizedBox(width: small ? 8 : 12),
                 IconButton(
                   iconSize: small ? 56 : 72,
                   icon: Icon(
@@ -551,7 +542,7 @@ class _HomeMainControls extends StatelessWidget {
                   color: onSurface,
                   onPressed: () => unawaited(PlaybackController.togglePlay()),
                 ),
-                SizedBox(width: small ? 16 : 24),
+                SizedBox(width: small ? 8 : 12),
                 IconButton(
                   icon: Icon(
                     Icons.skip_next_rounded,
@@ -588,14 +579,12 @@ class _HomeMainControls extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.volume_down, color: onSurfaceVariant, size: 18),
+                  VolumeStateIcon(color: onSurfaceVariant),
                   const SizedBox(width: 12),
                   CommonVolumeSlider(
                     width: small ? 180 : 240,
                     activeColor: accentColor,
                   ),
-                  const SizedBox(width: 12),
-                  Icon(Icons.volume_up, color: onSurfaceVariant, size: 18),
                   const SizedBox(width: 8),
                   const AudioDeviceButton(),
                 ],

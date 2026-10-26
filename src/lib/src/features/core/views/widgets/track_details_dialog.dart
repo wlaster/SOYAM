@@ -6,6 +6,7 @@ import 'package:signals_flutter/signals_flutter.dart';
 import 'package:yayma/src/app/session.dart';
 import 'package:yayma/src/features/core/theme/app_tokens.dart';
 import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
+import 'package:yayma/src/features/core/views/widgets/track_title.dart';
 import 'package:yayma/src/rust/api/content.dart' as rust;
 import 'package:yayma/src/rust/api/models.dart';
 
@@ -198,7 +199,12 @@ class _TrackDetailsDialogState extends State<TrackDetailsDialog> {
             ),
           ),
           const SizedBox(height: 4),
-          Text(value, style: TextStyle(color: cs.onSurface, fontSize: 16)),
+          Text(
+            value,
+            style: label == 'Название'
+                ? trackTitleStyle(context, weight: FontWeight.bold)
+                : TextStyle(color: cs.onSurface, fontSize: 16),
+          ),
         ],
       ),
     );

@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-25",
+  "method": "Authenticated API + at most 512 KiB of unencrypted stream for independent header inspection. No UI/user tests. API accepts codec and quality tier, not an exact bitrate. FLAC bitrate varies.",
+  "results": [
+    {
+      "title": "Believer",
+      "artist": "3 Doors Down",
+      "requested_codec": "aac",
+      "requested_kbps": 256,
+      "api_tier": "lossless",
+      "actual_codec": "aac-mp4",
+      "actual_kbps": 192,
+      "actual_tier": "nq",
+      "matches_requested": false,
+      "prefix_bytes": 524288,
+      "content_type": "application/octet-stream",
+      "magic_hex": "0000001c6674797069736f6d00000200",
+      "file_check": "Header format not identified"
+    },
+    {
+      "title": "Believer",
+      "artist": "3 Doors Down",
+      "requested_codec": "flac",
+      "requested_kbps": 1000,
+      "api_tier": "lossless",
+      "actual_codec": "mp3",
+      "actual_kbps": 192,
+      "actual_tier": "nq",
+      "matches_requested": false,
+      "prefix_bytes": 524288,
+      "content_type": "application/octet-stream",
+      "magic_hex": "fffbb064000ff0000069000000080000",
+      "file_check": "Header format not identified"
+    },
+    {
+      "title": "Believer",
+      "artist": "3 Doors Down",
+      "requested_codec": "mp3",
+      "requested_kbps": 320,
+      "api_tier": "lossless",
+      "actual_codec": "mp3",
+      "actual_kbps": 192,
+      "actual_tier": "nq",
+      "matches_requested": false,
+      "prefix_bytes": 524288,
+      "content_type": "application/octet-stream",
+      "magic_hex": "fffbb064000ff0000069000000080000",
+      "file_check": "Header format not identified"
+    },
+    {
+      "title": "Believer",
+      "artist": "3 Doors Down",
+      "requested_codec": "aac",
+      "requested_kbps": 128,
+      "api_tier": "lq",
+      "actual_codec": "aac",
+      "actual_kbps": 192,
+      "actual_tier": "nq",
+      "matches_requested": false,
+      "prefix_bytes": 524288,
+      "content_type": "application/octet-stream",
+      "magic_hex": "0000001c6674797069736f6d00000200",
+      "file_check": "Header format not identified"
+    },
+    {
+      "title": "Believer",
+      "artist": "3 Doors Down",
+      "requested_codec": "aac",
+      "requested_kbps": 192,
+      "api_tier": "nq",
+      "actual_codec": "aac-mp4",
+      "actual_kbps": 192,
+      "actual_tier": "nq",
+      "matches_requested": true,
+      "prefix_bytes": 524288,
+      "content_type": "application/octet-stream",
+      "magic_hex": "0000001c6674797069736f6d00000200",
+      "file_check": "Header format not identified"
+    }
+  ]
+}

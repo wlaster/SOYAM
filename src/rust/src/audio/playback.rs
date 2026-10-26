@@ -50,8 +50,7 @@ impl PlaybackEngine {
                 }
                 err => {
                     tracing::error!("Audio stream error: {:?}", err);
-                    let _ = tx_clone
-                        .try_send(crate::audio::commands::AudioMessage::RecreateStream);
+                    let _ = tx_clone.try_send(crate::audio::commands::AudioMessage::RecreateStream);
                 }
             }
         };

@@ -45,10 +45,17 @@ pub enum AudioMessage {
     // Yandex specific (will be handled by YandexProvider)
     PlayPlaylist(u32),
     PlayAlbum(u32),
+    PlayArtist(String),
     PlayAlbumTrack(u32, String),
     PlayPlaylistTrack(u32, String),
     PlayLikedTrack(String),
     StartWave(Vec<String>),
+    RefreshWavePreferences,
+    WavePreferencesFetched {
+        generation: u64,
+        preference_revision: u64,
+        result: Result<yandex_music::model::rotor::session::Session, String>,
+    },
     SyncLiked,
     WaveLike(String),
     WaveUnlike(String),

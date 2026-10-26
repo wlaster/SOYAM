@@ -86,18 +86,6 @@ pub async fn get_initial_settings() -> InitialSettingsDto {
     }
 }
 
-pub fn is_discord_rpc_enabled(ctx: &AppContext) -> bool {
-    ctx.audio.signals.discord_rpc.get()
-}
-
-pub async fn set_discord_rpc_enabled(ctx: &AppContext, enabled: bool) {
-    ctx.audio.signals.discord_rpc.set(enabled);
-    let mut db = ctx.core.db.lock().await;
-    if let Err(e) = db.save_setting("discord_rpc", &enabled).await {
-        tracing::error!("Failed to save discord_rpc setting: {:?}", e);
-    }
-}
-
 pub async fn is_custom_titlebar_enabled(ctx: &AppContext) -> bool {
     let mut db = ctx.core.db.lock().await;
     db.load_setting("custom_titlebar")

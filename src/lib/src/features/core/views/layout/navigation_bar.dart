@@ -445,11 +445,7 @@ class _AccountMenuDialog extends StatelessWidget {
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: Icon(
-                    Icons.close,
-                    color: cs.onSurfaceVariant,
-                    size: 20,
-                  ),
+                  icon: Icon(Icons.close, color: cs.onSurfaceVariant, size: 20),
                 ),
               ],
             ),
@@ -481,10 +477,7 @@ class _AccountMenuDialog extends StatelessWidget {
               },
             ),
 
-            Divider(
-              color: cs.onSurface.withValues(alpha: 0.1),
-              height: 40,
-            ),
+            Divider(color: cs.onSurface.withValues(alpha: 0.1), height: 40),
 
             _MenuTile(
               icon: Icons.logout_rounded,
@@ -506,11 +499,7 @@ class _MenuTile extends StatelessWidget {
   final String title;
   final VoidCallback? onTap;
 
-  const _MenuTile({
-    required this.icon,
-    required this.title,
-    this.onTap,
-  });
+  const _MenuTile({required this.icon, required this.title, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -652,9 +641,7 @@ class _NavIcon extends StatelessWidget {
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(isSelected ? 16 : 14),
             border: isSelected
-                ? Border.all(
-                    color: scheme.primary.withValues(alpha: 0.35),
-                  )
+                ? Border.all(color: scheme.primary.withValues(alpha: 0.35))
                 : null,
           ),
           child: IconButton(

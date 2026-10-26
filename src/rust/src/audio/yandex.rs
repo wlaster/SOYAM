@@ -1,4 +1,4 @@
-use crate::audio::queue::{clean_wave_seed, PlaybackContext};
+use crate::audio::queue::{PlaybackContext, clean_wave_seed};
 use crate::audio::signals::AudioSignals;
 use crate::http::ApiService;
 use im::Vector;
@@ -32,7 +32,9 @@ impl YandexProvider {
         }
         let index = track_id
             .and_then(|tid| tracks.iter().position(|t| t.id == tid))
-            .unwrap_or(0);
+            .unwrap_or_else(|| if self.signals.is_shuffled.get() {
+                rand::random_range(0..tracks.len())
+            } else { 0 });
         Ok((make_context(), Vector::from(tracks), index))
     }
 
@@ -48,6 +50,13 @@ impl YandexProvider {
             // the original Partial list in the context for QueueManager to
             // lazily resolve as the user approaches its end.
             if let PlaylistTracks::Partial(partial) = tracks_enum.clone() {
+                if self.signals.is_shuffled.get() {
+                    let tracks = crate::util::track::fetch_full_tracks(&self.api, tracks_enum.clone()).await;
+                    playlist.tracks = Some(PlaylistTracks::Full(tracks.clone()));
+                    return self.build_context(tracks, track_id,
+                        || PlaybackContext::Playlist(playlist), error_msg).await;
+                }
+
                 let target_index = track_id
                     .as_ref()
                     .and_then(|id| partial.iter().position(|p| p.id == *id));
@@ -62,8 +71,8 @@ impl YandexProvider {
                     Some(idx) if idx >= crate::audio::fetcher::FETCH_BATCH_SIZE => {
                         let half = crate::audio::fetcher::FETCH_BATCH_SIZE / 2;
                         let start = idx.saturating_sub(half);
-                        let end = (start + crate::audio::fetcher::FETCH_BATCH_SIZE)
-                            .min(partial.len());
+                        let end =
+                            (start + crate::audio::fetcher::FETCH_BATCH_SIZE).min(partial.len());
                         (start, partial[start..end].to_vec())
                     }
                     _ => (
@@ -83,9 +92,8 @@ impl YandexProvider {
                     .await;
                     if !initial.is_empty() {
                         // Trim context so pending-ids math stays correct.
-                        playlist.tracks = Some(PlaylistTracks::Partial(
-                            partial[window_start..].to_vec(),
-                        ));
+                        playlist.tracks =
+                            Some(PlaylistTracks::Partial(partial[window_start..].to_vec()));
                         let index_in_window = track_id
                             .as_ref()
                             .and_then(|tid| initial.iter().position(|t| &t.id == tid))
@@ -95,9 +103,9 @@ impl YandexProvider {
                                 })
                             })
                             .unwrap_or(0);
-                        let found = track_id.as_ref().is_none_or(|tid| {
-                            initial.iter().any(|t| &t.id == tid)
-                        });
+                        let found = track_id
+                            .as_ref()
+                            .is_none_or(|tid| initial.iter().any(|t| &t.id == tid));
                         if found {
                             return Ok((
                                 PlaybackContext::Playlist(playlist),
@@ -143,6 +151,21 @@ impl YandexProvider {
             "Liked tracks are empty or could not be loaded",
         )
         .await
+    }
+
+    pub async fn fetch_artist_context(&self, artist_id: String) -> ContextResult {
+        let (artist, _) = self.api.fetch_artist(artist_id.clone()).await?;
+        let mut tracks = Vec::new();
+        let mut page = 0;
+        loop {
+            let (batch, pager) = self.api.fetch_artist_tracks_paginated(artist_id.clone(), page, 100).await?;
+            if batch.is_empty() { break; }
+            tracks.extend(batch);
+            if tracks.len() >= pager.total as usize { break; }
+            page += 1;
+        }
+        self.build_context(tracks, None, || PlaybackContext::Artist(artist),
+            "Artist has no playable tracks").await
     }
 
     pub async fn fetch_album_context(

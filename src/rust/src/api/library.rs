@@ -423,7 +423,11 @@ pub async fn remove_disliked_artist(ctx: &AppContext, artist_id: String) -> bool
         if let Err(e) = api.remove_dislike_artist(id.clone()).await {
             tracing::warn!("remove_disliked_artist API failed, rolling back: {:?}", e);
             if !state.read().await.liked.is_artist_disliked(&id) {
-                state.write().await.liked.set_artist_dislike_status(&id, true);
+                state
+                    .write()
+                    .await
+                    .liked
+                    .set_artist_dislike_status(&id, true);
                 signals.library_changed.send_replace(());
                 signals.changed.send_replace(());
             }
@@ -737,14 +741,7 @@ pub(crate) async fn build_track_dtos(
 
     // 1. Fetch available metadata from DB
     let mut metadata_map = foldhash::HashMap::new();
-    if let Ok(metadata) = ctx
-        .core
-        .db
-        .lock()
-        .await
-        .get_track_metadata(&base_ids)
-        .await
-    {
+    if let Ok(metadata) = ctx.core.db.lock().await.get_track_metadata(&base_ids).await {
         for m in metadata {
             metadata_map.insert(m.id.clone(), m);
         }
@@ -882,8 +879,7 @@ pub async fn liked_tracks_stream(
     }
 
     loop {
-        let (liked_ids, disliked_ids_set) =
-            ctx.audio.state.read().await.liked.ordered_snapshot();
+        let (liked_ids, disliked_ids_set) = ctx.audio.state.read().await.liked.ordered_snapshot();
 
         // If the previous sequence had ids but sent zero DTOs (metadata was
         // missing from DB/network at the time), don't skip: a later

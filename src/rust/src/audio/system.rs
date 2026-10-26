@@ -1,24 +1,24 @@
 use crate::audio::cache::UrlCache;
 use crate::{
     audio::{
-        commands::AudioMessage, controller::AudioController,
-        fetcher::is_usable_wave_session, playback::PlaybackEngine, progress::TrackProgress,
-        queue::QueueManager, queue::as_wave_seed, signals::AudioSignals, state::SystemState,
+        commands::AudioMessage, controller::AudioController, fetcher::is_usable_wave_session,
+        playback::PlaybackEngine, progress::TrackProgress, queue::QueueManager,
+        queue::as_wave_seed, signals::AudioSignals, state::SystemState,
         stream_manager::StreamManager, yandex::YandexProvider,
     },
     http::{ApiService, LikedTracksSync, SessionExt},
 };
 
 #[cfg(not(any(target_os = "android")))]
-use crate::audio::{discord::DiscordManager, smtc::SmtcManager};
+use crate::audio::smtc::SmtcManager;
 
 use parking_lot::RwLock as PRwLock;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use tokio::sync::{RwLock, mpsc};
 #[cfg(not(any(target_os = "android")))]
 use tokio::sync::Mutex;
+use tokio::sync::{RwLock, mpsc};
 use yandex_music::model::track::Track;
 
 #[path = "system_loading.rs"]
@@ -138,8 +138,11 @@ impl AudioSystem {
         {
             let mut db = db.lock().await;
             if let Ok(ids) = db.load_liked_tracks().await {
-                let revision: Option<u64> =
-                    db.load_setting("liked_tracks_revision").await.ok().flatten();
+                let revision: Option<u64> = db
+                    .load_setting("liked_tracks_revision")
+                    .await
+                    .ok()
+                    .flatten();
                 let mut state = state.write().await;
                 state.liked.set_liked_ids(ids);
                 state.liked.revision = revision;
@@ -176,10 +179,6 @@ impl AudioSystem {
         };
 
         let mut system_loop = system;
-
-        // Start Discord integration
-        #[cfg(not(any(target_os = "android")))]
-        DiscordManager::spawn(signals.clone());
 
         // Background task for SMTC
         #[cfg(not(any(target_os = "android")))]
@@ -525,6 +524,14 @@ impl AudioSystem {
                         .map_err(|e| format!("Failed to load album: {e}"))
                 });
             }
+            AudioMessage::PlayArtist(artist_id) => {
+                let generation = self.begin_context_change();
+                let yandex = self.yandex.clone();
+                self.spawn_fetch_context(generation, move || async move {
+                    yandex.fetch_artist_context(artist_id).await
+                        .map_err(|e| format!("Failed to load artist: {e}"))
+                });
+            }
             AudioMessage::PlayAlbumTrack(aid, tid) => {
                 self.spawn_single_track_with_offline(
                     system_loading::SingleTrackSource::AlbumTrack { album_id: aid },
@@ -538,10 +545,7 @@ impl AudioSystem {
                 );
             }
             AudioMessage::PlayLikedTrack(tid) => {
-                self.spawn_single_track_with_offline(
-                    system_loading::SingleTrackSource::Liked,
-                    tid,
-                );
+                self.spawn_single_track_with_offline(system_loading::SingleTrackSource::Liked, tid);
             }
             AudioMessage::StartWave(seeds) => {
                 let generation = self.begin_context_change();
@@ -552,6 +556,35 @@ impl AudioSystem {
                         .await
                         .map_err(|e| format!("Failed to start wave: {e}"))
                 });
+            }
+            AudioMessage::RefreshWavePreferences => {
+                if self.queue.in_wave() {
+                    let generation = self.context_generation.load(Ordering::Acquire);
+                    let api = self.yandex.api.clone();
+                    let preference_revision = api.ai_preference_revision();
+                    let mut seeds: Vec<String> = self.signals.current_wave_seeds.get().iter()
+                        .map(|seed| crate::audio::queue::clean_wave_seed(seed)).collect();
+                    if seeds.is_empty() { seeds.push("user:onyourwave".into()); }
+                    let tx = self.tx.clone();
+                    tokio::spawn(async move {
+                        let result = api.create_session(seeds).await.map_err(|e| e.to_string());
+                        let _ = tx.send(AudioMessage::WavePreferencesFetched {
+                            generation, preference_revision, result }).await;
+                    });
+                }
+            }
+            AudioMessage::WavePreferencesFetched { generation, preference_revision, result } => {
+                if self.context_generation.load(Ordering::Acquire) == generation
+                    && self.yandex.api.ai_preference_revision() == preference_revision
+                    && self.queue.in_wave() {
+                    match result {
+                        Ok(session) => {
+                            if self.queue.apply_wave_preferences(session) { self.send_wave_started(); }
+                            else { (self.error_sink)("Не удалось обновить Мою волну".into()); }
+                        },
+                        Err(_) => (self.error_sink)("Настройка сохранена. Не удалось обновить Мою волну — запустите её ещё раз".into()),
+                    }
+                }
             }
             AudioMessage::SyncLiked => {
                 Self::sync_liked_collection_with(
@@ -838,7 +871,9 @@ impl AudioSystem {
 
                 let mut db = db_arc.lock().await;
                 let _ = db.save_liked_tracks(&ids).await;
-                let _ = db.save_setting("liked_tracks_revision", &new_revision).await;
+                let _ = db
+                    .save_setting("liked_tracks_revision", &new_revision)
+                    .await;
                 drop(db);
 
                 signals.library_changed.send_replace(());

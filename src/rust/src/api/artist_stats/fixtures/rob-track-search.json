@@ -1,0 +1,61 @@
+{
+  "data": {
+    "searchV2": {
+      "tracksV2": {
+        "items": [
+          {
+            "item": {
+              "data": {
+                "name": "Пальмы",
+                "artists": {
+                  "items": [
+                    {
+                      "id": "5UvEAbRD8ppSm1hQ7YaQux",
+                      "profile": {
+                        "name": "Rob"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "item": {
+              "data": {
+                "name": "Пальмы, пляж и пиво на завтрак",
+                "artists": {
+                  "items": [
+                    {
+                      "id": "62zoD5Eb7GW6FIzPC5p1Ra",
+                      "profile": {
+                        "name": "Robo Zvuk Klan"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "item": {
+              "data": {
+                "name": "Palmun Alla",
+                "artists": {
+                  "items": [
+                    {
+                      "id": "5HZeWJteVCHn2PLNSIhoAy",
+                      "profile": {
+                        "name": "Jumal Velho"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

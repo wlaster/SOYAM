@@ -26,6 +26,7 @@ class AppContextMenu<T> extends StatelessWidget {
   final List<AppContextMenuItem<T>> items;
   final void Function(T value) onSelected;
   final Widget child;
+  final Widget Function(VoidCallback toggle)? triggerBuilder;
   final VoidCallback? onOpen;
   final VoidCallback? onClose;
   final BorderRadius borderRadius;
@@ -39,6 +40,7 @@ class AppContextMenu<T> extends StatelessWidget {
     required this.items,
     required this.onSelected,
     required this.child,
+    this.triggerBuilder,
     this.onOpen,
     this.onClose,
     this.borderRadius = const BorderRadius.all(Radius.circular(100)),
@@ -73,6 +75,9 @@ class AppContextMenu<T> extends StatelessWidget {
         return _buildItem(context, entry.value, entry.key);
       }).toList(),
       builder: (context, controller, child) {
+        void toggle() =>
+            controller.isOpen ? controller.close() : controller.open();
+        if (triggerBuilder != null) return triggerBuilder!(toggle);
         // Local Material: ink paints at the trigger itself instead of a
         // Material buried under opaque backgrounds (e.g. the player backdrop).
         return Material(

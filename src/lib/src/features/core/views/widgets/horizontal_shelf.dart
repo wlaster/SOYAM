@@ -2,6 +2,8 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:yayma/src/features/core/views/widgets/horizontal_scroll_fade.dart';
+import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 
 /// Horizontal shelf with desktop scrolling support.
 ///
@@ -112,9 +114,7 @@ class _HorizontalShelfState extends State<HorizontalShelf> {
       child: IconButton(
         onPressed: () => _step(direction),
         tooltip: direction < 0 ? 'Назад' : 'Вперёд',
-        icon: Icon(
-          direction < 0 ? Icons.chevron_left : Icons.chevron_right,
-        ),
+        icon: Icon(direction < 0 ? Icons.chevron_left : Icons.chevron_right),
         style: IconButton.styleFrom(
           backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.92),
           foregroundColor: cs.onSurface,
@@ -151,31 +151,32 @@ class _HorizontalShelfState extends State<HorizontalShelf> {
       ),
     );
 
-    // Touch platforms: swipe works natively, no arrows needed.
-    if (_isTouch) {
-      return SizedBox(height: widget.height, child: list);
-    }
-
-    return SizedBox(
-      height: widget.height,
-      child: Stack(
-        children: [
-          list,
-          if (_canGoBack)
-            Positioned(
-              left: 4,
-              top: 0,
-              bottom: 0,
-              child: _arrowButton(context, -1),
-            ),
-          if (_canGoForward)
-            Positioned(
-              right: 4,
-              top: 0,
-              bottom: 0,
-              child: _arrowButton(context, 1),
-            ),
-        ],
+    final fadedList = HorizontalScrollFade(child: list);
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding),
+      child: SizedBox(
+        height: widget.height,
+        child: _isTouch
+            ? fadedList
+            : Stack(
+                children: [
+                  fadedList,
+                  if (_canGoBack)
+                    Positioned(
+                      left: 4,
+                      top: 0,
+                      bottom: 0,
+                      child: _arrowButton(context, -1),
+                    ),
+                  if (_canGoForward)
+                    Positioned(
+                      right: 4,
+                      top: 0,
+                      bottom: 0,
+                      child: _arrowButton(context, 1),
+                    ),
+                ],
+              ),
       ),
     );
   }

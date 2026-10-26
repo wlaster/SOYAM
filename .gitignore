@@ -1,4 +1,5 @@
 /target
+/dist/
 .env
 .cargo
 src/lib/src/rust/frb_generated.web.dart

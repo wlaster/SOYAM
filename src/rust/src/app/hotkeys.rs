@@ -24,8 +24,8 @@ use {
     crate::api::library,
     crate::audio::commands::AudioMessage,
     std::str::FromStr,
-    std::sync::mpsc,
     std::sync::OnceLock,
+    std::sync::mpsc,
     std::time::Duration,
     wayclip_global_hotkey::hotkey::{Code, HotKey, Modifiers},
     wayclip_global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager},
@@ -131,12 +131,19 @@ fn merge_with_defaults(mut persisted: HotkeySettings) -> HotkeySettings {
             persisted.bindings.push(def.clone());
         }
     }
-    let order: Vec<&str> = defaults.bindings.iter().map(|b| b.action.as_str()).collect();
+    let order: Vec<&str> = defaults
+        .bindings
+        .iter()
+        .map(|b| b.action.as_str())
+        .collect();
     persisted
         .bindings
         .retain(|b| HotkeyAction::from_name(&b.action).is_some());
     persisted.bindings.sort_by_key(|b| {
-        order.iter().position(|a| *a == b.action).unwrap_or(usize::MAX)
+        order
+            .iter()
+            .position(|a| *a == b.action)
+            .unwrap_or(usize::MAX)
     });
     persisted
 }

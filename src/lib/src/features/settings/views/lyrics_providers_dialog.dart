@@ -11,9 +11,7 @@ import 'package:yayma/src/features/playback/providers/lyrics_provider.dart';
 import 'package:yayma/src/rust/api/content.dart' as rust;
 import 'package:yayma/src/rust/api/models.dart';
 
-/// Lets the user disable individual lyrics sources. The order they're
-/// queried in is fixed (word-synced-capable sources first) and isn't
-/// user-editable — this only controls which ones participate at all.
+/// Lets the user disable individual fallback sources after Yandex Music.
 class LyricsProvidersDialog extends StatefulWidget {
   final bool asSheet;
 
@@ -58,6 +56,7 @@ class _LyricsProvidersDialogState extends State<LyricsProvidersDialog> {
     final ctx = appContextSignal.value;
     if (ctx == null) return;
     final providers = await rust.getLyricsProviderSettings(ctx: ctx);
+    applyLyricsProviderSettings(providers);
     if (mounted) {
       setState(() {
         _providers = providers;
@@ -88,7 +87,7 @@ class _LyricsProvidersDialogState extends State<LyricsProvidersDialog> {
       id: provider.id,
       isEnabledFlag: enabled,
     );
-    clearLyricsCache();
+    applyLyricsProviderSettings(_providers!);
   }
 
   @override
@@ -158,8 +157,9 @@ class _LyricsProvidersDialogState extends State<LyricsProvidersDialog> {
             children: [
               Text(
                 'Отключённые источники не используются при поиске '
-                'текста. Порядок поиска фиксированный: сначала — '
-                'источники с синхронизацией по словам.',
+                'текста в режиме Авто. Синхронизированные тексты имеют приоритет. '
+                'Lyrics.ovh и Genius дают текст без таймкодов. '
+                'Все источники по умолчанию включены.',
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
               ),
               const SizedBox(height: 16),

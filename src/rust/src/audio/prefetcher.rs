@@ -38,7 +38,7 @@ impl UrlPrefetcher {
                     let mut batch = Vec::new();
                     while batch.len() < URL_PREFETCH_BATCH_SIZE {
                         if let Some(id) = pending_ids.pop_front() {
-                            if url_cache.get(&id).is_none() {
+                            if url_cache.get(&id, api.get_quality()).is_none() {
                                 batch.push(id);
                             }
                         } else {
@@ -52,17 +52,18 @@ impl UrlPrefetcher {
 
                         current_task_ids = batch.iter().cloned().collect();
 
+                        let quality = api.get_quality();
                         current_task = Some(tokio::spawn(async move {
                             let result = tokio::time::timeout(
                                 Duration::from_secs(10),
-                                api.fetch_track_urls_batch(batch),
+                                api.fetch_track_urls_batch(batch, quality),
                             )
                             .await;
 
                             match result {
                                 Ok(Ok(urls)) => {
                                     for (id, url, mirror_urls, codec) in urls {
-                                        cache.insert(id, url, mirror_urls, codec);
+                                        cache.insert(id, url, mirror_urls, codec, quality);
                                     }
                                 }
                                 Ok(Err(e)) => {
@@ -98,7 +99,7 @@ impl UrlPrefetcher {
                                 }
                                 pending_ids.clear();
                                 for id in needed_ids {
-                                    if url_cache.get(&id).is_none() && !current_task_ids.contains(&id) {
+                                    if url_cache.get(&id, api.get_quality()).is_none() && !current_task_ids.contains(&id) {
                                         pending_ids.push_back(id);
                                     }
                                 }

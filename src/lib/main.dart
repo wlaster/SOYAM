@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:signals_flutter/signals_flutter.dart';
@@ -16,6 +17,11 @@ import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'Google Sans',
+    ], await rootBundle.loadString('assets/fonts/GoogleSans-OFL.txt'));
+  });
 
   final isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
   if (!isDesktop) {
@@ -181,9 +187,9 @@ class MyApp extends StatelessWidget {
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: scheme,
-      fontFamily: 'Inter',
+      fontFamily: 'Google Sans',
       scaffoldBackgroundColor: Colors.black,
-      textTheme: textTheme,
+      textTheme: textTheme.apply(fontFamily: 'Google Sans'),
       splashFactory: InkRipple.splashFactory,
       highlightColor: scheme.primary.withValues(alpha: 0.08),
       hoverColor: Colors.white.withValues(alpha: 0.04),

@@ -71,30 +71,13 @@ class _AppLayoutState extends State<AppLayout> {
                   const Positioned.fill(child: BlurredCoverBackground()),
                   const Positioned.fill(child: WaveBackground()),
 
-                  // 2. Dimming when leaving home or showing lyrics — held
-                  // off while lyrics are still loading or came back empty,
-                  // so nothing is shown over a darkened background in
-                  // either case.
-                  SignalBuilder(
-                    builder: (context) {
-                      final showLyrics = showLyricsSignal.value;
-                      final hideOverlay = hideLyricsOverlaySignal.value;
-                      final suppressDim = lyricsSuppressDimSignal.value;
-                      final isDimmed =
-                          !isHome ||
-                          (showLyrics && !hideOverlay && !suppressDim);
-
-                      return Positioned.fill(
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 500),
-                          color: isDimmed
-                              ? (isHome
-                                    ? Colors.black54
-                                    : Colors.black.withValues(alpha: 0.6))
-                              : Colors.transparent,
-                        ),
-                      );
-                    },
+                  // Keep the cover equally dim with lyrics open or closed.
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: isHome
+                          ? Colors.black54
+                          : Colors.black.withValues(alpha: 0.6),
+                    ),
                   ),
 
                   Positioned.fill(
@@ -394,9 +377,21 @@ class _WindowContent extends StatelessWidget {
           child: _mapSectionToWidget(context, state),
         );
 
+        final symmetricMargins = switch (state.section) {
+          AppSection.playlist ||
+          AppSection.album ||
+          AppSection.artist ||
+          AppSection.liked ||
+          AppSection.playlists ||
+          AppSection.search ||
+          AppSection.account ||
+          AppSection.yandexId => true,
+          _ => false,
+        };
         return Padding(
           padding: EdgeInsets.only(
             left: (isHome || isNarrow) ? 0 : 96,
+            right: !isNarrow && symmetricMargins ? 96 : 0,
             bottom: bottomPadding,
           ),
           child: child,

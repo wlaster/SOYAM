@@ -1,3 +1,4 @@
+mod recommendations;
 use crate::api::models::AudioQuality;
 use chrono::Utc;
 use parking_lot::RwLock;
@@ -20,7 +21,7 @@ use yandex_music::{
         },
         artist::{
             add_disliked_artist::AddDislikedArtistOptions, add_liked_artist::AddLikedArtistOptions,
-            get_artist::GetArtistOptions, get_artist_albums::GetArtistAlbumsOptions,
+            get_artist_albums::GetArtistAlbumsOptions,
             get_artist_tracks::ArtistTracksOptions,
             remove_disliked_artist::RemoveDislikedArtistOptions,
             remove_liked_artist::RemoveLikedArtistOptions,
@@ -30,11 +31,12 @@ use yandex_music::{
             change_playlist_visibility::ChangePlaylistVisibilityOptions,
             create_playlist::CreatePlaylistOptions, delete_playlist::DeletePlaylistOptions,
             get_all_playlists::GetAllPlaylistsOptions, get_playlists::GetPlaylistsOptions,
-            modify_playlist::ModifyPlaylistOptions, remove_liked_playlist::RemoveLikedPlaylistOptions,
+            modify_playlist::ModifyPlaylistOptions,
+            remove_liked_playlist::RemoveLikedPlaylistOptions,
             rename_playlist::RenamePlaylistOptions,
         },
         rotor::{
-            create_session::CreateSessionOptions, get_session_tracks::GetSessionTracksOptions,
+            get_session_tracks::GetSessionTracksOptions,
             send_station_feedback::SendStationFeedbackOptions,
         },
         search::get_search::SearchOptions,
@@ -167,6 +169,9 @@ pub struct ApiService {
     pub http_client: reqwest::Client,
     user_id: u64,
     pub quality: RwLock<AudioQuality>,
+    ai_content_reduction: RwLock<Option<bool>>,
+    ai_settings_lock: tokio::sync::Mutex<()>,
+    ai_revision: std::sync::atomic::AtomicU64,
 }
 
 #[derive(Debug)]
@@ -264,6 +269,9 @@ impl ApiService {
             http_client,
             user_id,
             quality,
+            ai_content_reduction: RwLock::new(None),
+            ai_settings_lock: tokio::sync::Mutex::new(()),
+            ai_revision: std::sync::atomic::AtomicU64::new(0),
         })
     }
 
@@ -496,7 +504,7 @@ impl ApiService {
         quality: AudioQuality,
         preferred_codec: Option<&str>,
     ) -> Result<(String, String)> {
-        let mut opts = GetFileInfoOptions::new(track_id).quality(Self::map_quality(quality));
+        let mut opts = GetFileInfoOptions::new(track_id.clone()).quality(Self::map_quality(quality));
         if let Some(codec) = preferred_codec.and_then(Self::codec_by_name) {
             opts = opts.codecs([codec]);
         }
@@ -525,8 +533,8 @@ impl ApiService {
         Ok((info.url, info.codec))
     }
 
-    pub async fn fetch_track_stream_info(&self, track_id: String) -> Result<TrackStreamInfo> {
-        let opts = GetFileInfoOptions::new(track_id).quality(Self::map_quality(self.get_quality()));
+    pub async fn fetch_track_stream_info(&self, track_id: String, quality: AudioQuality) -> Result<TrackStreamInfo> {
+        let opts = GetFileInfoOptions::new(track_id.clone()).quality(Self::map_quality(quality));
         let mut last_error = None;
         let mut info = None;
         for attempt in 0..MAX_REQUEST_ATTEMPTS {
@@ -568,7 +576,10 @@ impl ApiService {
 
     pub async fn fetch_track_url_for_download(&self, track_id: String) -> Result<(String, String)> {
         // Try the same fetch as playback first (favors FLAC for Lossless quality)
-        let (url, codec) = self.fetch_track_url(track_id.clone()).await?;
+        let (url, codec) = match self.fetch_track_url(track_id.clone()).await {
+            Ok(info) => info,
+            Err(_) => return self.fetch_legacy_mp3_url(track_id).await,
+        };
 
         // If it's already FLAC or MP3, we are happy.
         if codec.contains("flac") || codec.contains("mp3") {
@@ -587,11 +598,26 @@ impl ApiService {
         Ok((url, codec))
     }
 
+    pub async fn fetch_legacy_mp3_url(&self, track_id: String) -> Result<(String, String)> {
+        use yandex_music::api::track::get_download_info::GetDownloadInfoOptions;
+        let mut variants = self.client.get_download_info(&GetDownloadInfoOptions::new(track_id)).await?;
+        variants.retain(|info| !info.preview && info.codec == "mp3");
+        variants.sort_by_key(|info| std::cmp::Reverse(info.bitrate_in_kbps));
+        let mut last_error = None;
+        for variant in variants {
+            match variant.get_direct_link(&self.http_client).await {
+                Ok(url) => return Ok((url, "mp3".into())),
+                Err(error) => last_error = Some(error.to_string()),
+            }
+        }
+        Err(last_error.unwrap_or_else(|| "Полная MP3-версия трека недоступна".into()).into())
+    }
+
     pub async fn fetch_track_urls_batch(
         &self,
         track_ids: Vec<String>,
+        quality: AudioQuality,
     ) -> Result<Vec<(String, String, Vec<String>, String)>> {
-        let quality = self.get_quality();
 
         let infos = self
             .fetch_file_info_batch(track_ids.clone(), Self::map_quality(quality))
@@ -629,7 +655,15 @@ impl ApiService {
         match self.client.get_lyrics(&opts).await {
             Ok(lyrics) => {
                 let url = lyrics.download_url;
-                let text = self.client.inner.get(url).send().await?.text().await?;
+                let text = self
+                    .client
+                    .inner
+                    .get(url)
+                    .send()
+                    .await?
+                    .error_for_status()?
+                    .text()
+                    .await?;
                 Ok(Some(text))
             }
             Err(_) => Ok(None),
@@ -644,9 +678,20 @@ impl ApiService {
     pub async fn fetch_artist(
         &self,
         artist_id: String,
-    ) -> Result<yandex_music::model::artist::Artist> {
-        let opts = GetArtistOptions::new(artist_id);
-        Ok(self.client.get_artist(&opts).await?.artist)
+    ) -> Result<(yandex_music::model::artist::Artist, Option<u32>)> {
+        let value: serde_json::Value = self.http_client
+            .get(format!("https://api.music.yandex.net/artists/{}/brief-info", urlencoding::encode(&artist_id)))
+            .send().await?.error_for_status()?.json().await?;
+        let result = &value["result"];
+        let listeners = result["stats"]["lastMonthListeners"].as_u64().and_then(|n| u32::try_from(n).ok());
+        // The brief response includes partial dates and nested composite artists.
+        // Deserialize only fields used by the artist card, avoiding unrelated legacy shapes.
+        let mut fields = serde_json::Map::new();
+        for key in ["id", "name", "cover", "likesCount", "links", "ratings"] {
+            if let Some(value) = result["artist"].get(key) { fields.insert(key.into(), value.clone()); }
+        }
+        let artist = serde_json::Value::Object(fields);
+        Ok((serde_json::from_value(artist)?, listeners))
     }
 
     pub async fn fetch_artist_albums(
@@ -657,7 +702,8 @@ impl ApiService {
     ) -> Result<Vec<Album>> {
         let opts = GetArtistAlbumsOptions::new(artist_id)
             .page(page)
-            .page_size(page_size);
+            .page_size(page_size)
+            .sort_by(yandex_music::model::artist::SortBy::Year);
         Ok(self.client.get_artist_albums(&opts).await?.albums)
     }
 
@@ -677,14 +723,6 @@ impl ApiService {
     pub async fn fetch_stations(&self) -> Result<Vec<Rotor>> {
         let opts = yandex_music::api::rotor::get_all_stations::GetAllStationsOptions::default();
         Ok(self.client.get_all_stations(&opts).await?)
-    }
-
-    pub async fn create_session(&self, seeds: Vec<String>) -> Result<Session> {
-        let opts = CreateSessionOptions::new(seeds)
-            .include_tracks_in_response(true)
-            .include_wave_model(true)
-            .interactive(true);
-        Ok(self.client.create_session(opts).await?)
     }
 
     pub async fn get_session_tracks(
@@ -1063,5 +1101,138 @@ mod tests {
         assert_eq!(albums.len(), 1);
         assert_eq!(albums[0].id, Some(30));
         assert_eq!(albums[0].title.as_deref(), Some("Library album"));
+    }
+}
+
+#[cfg(test)]
+mod live_quality_tests {
+    use super::*;
+    #[tokio::test]
+    #[ignore = "uses saved local account and internet"]
+    async fn live_quality_and_yandex_audience() {
+        let path = std::path::PathBuf::from(std::env::var("APPDATA").unwrap()).join("darkplayoff.yayma.app/yayma/yamusic_v2.db");
+        let db = rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let raw: String = db.query_row("SELECT value FROM app_settings WHERE key='auth_token'", [], |row| row.get(0)).unwrap();
+        let (token, uid): (String, u64) = serde_json::from_str(&raw).unwrap();
+        let track: String = db.query_row("SELECT track_id FROM track_metadata LIMIT 1", [], |row| row.get(0)).unwrap();
+        drop(db);
+        let api = ApiService::new(token, Some(uid)).await.unwrap();
+        for quality in [AudioQuality::Low, AudioQuality::Normal, AudioQuality::High] {
+            let opts = GetFileInfoOptions::new(track.clone()).quality(ApiService::map_quality(quality));
+            let info = api.file_info_client.get_file_info(&opts).await.unwrap();
+            println!("QUALITY {:?}: actual={} codec={} bitrate={} size={:?}", quality, info.quality, info.codec, info.bitrate, info.size);
+            assert!(!info.url.is_empty());
+        }
+        let (artist, audience) = api.fetch_artist(std::env::var("ARTIST_STATS_TEST_ID").unwrap_or_else(|_| "675068".into())).await.unwrap();
+        println!("YANDEX audience={:?}; chart position={:?}", audience, artist.ratings.map(|r| r.month));
+        assert!(audience.is_some());
+    }
+}
+
+
+#[cfg(test)]
+mod popular_high_quality_diagnostics {
+    use super::*;
+
+    fn normalized(value: &str) -> String {
+        value.chars().flat_map(char::to_lowercase).filter(|c| c.is_alphanumeric()).collect()
+    }
+
+    #[tokio::test]
+    #[ignore = "real network, saved local authorization; no UI or playback"]
+    async fn live_current_high_quality_popular_tracks() {
+        let db_path = std::path::PathBuf::from(std::env::var("APPDATA").unwrap())
+            .join("darkplayoff.yayma.app/yayma/yamusic_v2.db");
+        let db = rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let raw: String = db.query_row("SELECT value FROM app_settings WHERE key='auth_token'", [], |row| row.get(0)).unwrap();
+        let (token, uid): (String, u64) = serde_json::from_str(&raw).unwrap();
+        drop(db);
+        let api = ApiService::new(token, Some(uid)).await.unwrap();
+        api.set_quality(AudioQuality::High);
+        let media_client = crate::util::tls::builder().timeout(Duration::from_secs(20)).build().unwrap();
+        let root = std::env::current_dir().unwrap();
+        let report_path = root.join("../../docs/high-quality-current-check.json");
+        let sample_dir = root.join("../../../tools/high-quality-current-samples");
+        std::fs::create_dir_all(&sample_dir).unwrap();
+        let songs = [
+            ("Imagine Dragons", "Believer"),
+            ("The Weeknd", "Blinding Lights"),
+            ("Dua Lipa", "Levitating"),
+            ("Billie Eilish", "bad guy"),
+            ("Ed Sheeran", "Shape of You"),
+            ("Linkin Park", "In the End"),
+            ("Кино", "Группа крови"),
+            ("Король и Шут", "Кукла колдуна"),
+        ];
+        let mut results = Vec::new();
+        for (artist, title) in songs {
+            let query = format!("{artist} {title}");
+            let result: std::result::Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> = async {
+                let data: serde_json::Value = api.http_client.get("https://api.music.yandex.net/search")
+                    .query(&[("text", query.as_str()), ("type", "track"), ("page", "0")])
+                    .send().await?.error_for_status()?.json().await?;
+                let tracks = data["result"]["tracks"]["results"].as_array().ok_or("search has no tracks")?;
+                let wanted_title = normalized(title);
+                let wanted_artist = normalized(artist);
+                let track = tracks.iter().find(|track| {
+                    track["title"].as_str().is_some_and(|t| normalized(t) == wanted_title)
+                        && track["artists"].as_array().is_some_and(|artists| artists.iter().any(|a| a["name"].as_str().is_some_and(|n| normalized(n) == wanted_artist)))
+                        && track["available"].as_bool() != Some(false)
+                }).ok_or("no exact original-artist/title match")?;
+                let id = track["id"].as_str().map(str::to_string).unwrap_or_else(|| track["id"].to_string());
+                // This is the actual production entry point used by StreamManager.
+                let stream = api.fetch_track_stream_info(id.clone(), api.get_quality()).await?;
+                let metadata = api.file_info_client.get_file_info(
+                    &GetFileInfoOptions::new(id.clone()).quality(ApiService::map_quality(api.get_quality()))
+                ).await?;
+                let mut row = serde_json::json!({
+                    "artist": artist, "title": title, "track_id": id,
+                    "version": track["version"], "requested_mode": "High", "requested_quality": "lossless",
+                    "production_codec": stream.codec, "api_codec": metadata.codec,
+                    "api_quality": metadata.quality, "api_kbps": metadata.bitrate,
+                    "production_url_received": !stream.url.is_empty(),
+                    "codec_matches_metadata_request": stream.codec == metadata.codec,
+                    "mirror_count": stream.mirror_urls.len()
+                });
+                let download: std::result::Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> = async {
+                    let mut response = media_client.get(&stream.url).header("Range", "bytes=0-524287")
+                        .send().await?.error_for_status()?;
+                    let mut prefix = Vec::new();
+                    while let Some(chunk) = response.chunk().await? {
+                        let remaining = 524288usize.saturating_sub(prefix.len());
+                        prefix.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
+                        if prefix.len() >= 524288 { break; }
+                    }
+                    Ok(prefix)
+                }.await;
+                match download {
+                    Ok(prefix) => {
+                        let filename = format!("{id}.bin");
+                        std::fs::write(sample_dir.join(&filename), &prefix)?;
+                        row["sample_filename"] = filename.into();
+                        row["sample_bytes"] = prefix.len().into();
+                    }
+                    Err(_) => row["sample_error"] = "could not read bounded media prefix".into(),
+                }
+                Ok(row)
+            }.await;
+            match result {
+                Ok(row) => {
+                    println!("HQ {} — {}: codec={}, tier={}, bitrate={} kbps; production URL={}", artist, title,
+                        row["production_codec"], row["api_quality"], row["api_kbps"], row["production_url_received"]);
+                    results.push(row);
+                }
+                Err(_) => {
+                    println!("HQ {artist} — {title}: lookup/request failed");
+                    results.push(serde_json::json!({"artist":artist,"title":title,"error":"lookup or stream request failed"}));
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(150)).await;
+        }
+        let successful = results.iter().filter(|row| row["production_url_received"] == true).count();
+        let report = serde_json::json!({"tested_at_utc":chrono::Utc::now().to_rfc3339(),"method":"Real ApiService::fetch_track_stream_info in High mode, separate identical metadata request, bounded production stream prefixes. No UI or playback; database read-only.","results":results});
+        std::fs::write(report_path, serde_json::to_string_pretty(&report).unwrap()).unwrap();
+        assert!(successful > 0, "No actual production stream request succeeded");
+        println!("Production High test: {successful}/8 successful stream URLs");
     }
 }

@@ -33,7 +33,6 @@ pub struct AudioSignals {
     pub current_wave_seeds: Signal<Vec<String>>,
     pub amplitude: Signal<f32>,
     pub codec: Signal<Option<String>>,
-    pub discord_rpc: Signal<bool>,
     pub selected_device: Signal<Option<String>>,
     /// False when the wave shader is disabled in settings — the bridge worker
     /// skips VibeTick computation entirely (see workers.rs).
@@ -78,7 +77,6 @@ impl AudioSignals {
             current_wave_seeds: Signal::new(Vec::new()),
             amplitude: Signal::new(0.0),
             codec: Signal::new(None),
-            discord_rpc: Signal::new(false),
             selected_device: Signal::new(None),
             vibe_enabled: Signal::new(true),
             monitor: Arc::new(Monitor::new(1024)),

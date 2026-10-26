@@ -9,6 +9,7 @@ import 'package:yayma/src/features/core/theme/app_tokens.dart';
 import 'package:yayma/src/features/core/utils/cover_tint.dart';
 import 'package:yayma/src/features/core/views/widgets/app_cover.dart';
 import 'package:yayma/src/features/core/views/widgets/track_elements.dart';
+import 'package:yayma/src/features/core/views/widgets/track_title.dart';
 import 'package:yayma/src/rust/api/models.dart';
 
 /// Header data of the track context menu.
@@ -263,7 +264,6 @@ class _SheetHeaderState extends State<_SheetHeader>
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final header = widget.header;
 
     return ClipRect(
@@ -316,10 +316,9 @@ class _SheetHeaderState extends State<_SheetHeader>
                                 header.version == null
                                     ? header.title
                                     : '${header.title} ${header.version}',
-                                style: TextStyle(
-                                  color: scheme.onSurface,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w700,
+                                style: trackTitleStyle(
+                                  context,
+                                  weight: FontWeight.w700,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,

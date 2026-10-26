@@ -1,8 +1,6 @@
 pub mod cache;
 pub mod commands;
 pub mod controller;
-#[cfg(not(any(target_os = "android")))]
-pub mod discord;
 pub mod enums;
 pub mod fetcher;
 pub mod fx;

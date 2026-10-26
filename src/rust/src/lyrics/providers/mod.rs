@@ -1,5 +1,7 @@
 pub mod betterlyrics;
+pub mod genius;
 pub mod lrclib;
+pub mod lyricsovh;
 pub mod youlyplus;
 
 use regex::Regex;

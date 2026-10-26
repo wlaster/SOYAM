@@ -1,3 +1,4 @@
+use crate::api::models::AudioQuality;
 use crate::audio::cache::UrlCache;
 use crate::audio::progress::TrackProgress;
 use crate::http::ApiService;
@@ -23,18 +24,36 @@ pub struct PreparedStream {
 
 // Keep one prepared stream ahead of the current track. This mirrors the desktop client's
 // single-source preload policy and avoids competing network reads during rapid skips.
-const MAX_PREWARM_ENTRIES: usize = 1;
+// During a transition the current track's prepared session has not yet been
+// consumed when the queue asks to prepare its successor. Reserve both slots.
+const MAX_PREWARM_ENTRIES: usize = 2;
 
 #[derive(Default)]
 struct PrewarmCache {
     entries: HashMap<String, PreparedStream>,
     in_flight: HashMap<String, u64>,
     next_generation: u64,
+    quality: Option<AudioQuality>,
     // Insertion order, oldest first, for FIFO eviction once `entries` is full.
     order: VecDeque<String>,
 }
 
 impl PrewarmCache {
+    fn ensure_quality(&mut self, quality: AudioQuality) {
+        if self.quality != Some(quality) {
+            self.entries.clear();
+            self.in_flight.clear();
+            self.order.clear();
+            self.quality = Some(quality);
+        }
+    }
+
+    fn retain_interest(&mut self, current: Option<&str>, next: Option<&str>) {
+        let keep = |id: &str| current == Some(id) || next == Some(id);
+        self.entries.retain(|id, _| keep(id));
+        self.in_flight.retain(|id, _| keep(id));
+        self.order.retain(|id| keep(id));
+    }
     fn contains(&self, id: &str) -> bool {
         self.entries.contains_key(id) || self.in_flight.contains_key(id)
     }
@@ -104,6 +123,12 @@ pub struct StreamManager {
 }
 
 impl StreamManager {
+    pub fn update_prewarm_interest(&self, current: Option<&str>, next: Option<Track>) {
+        self.prewarm_cache.lock().retain_interest(current, next.as_ref().map(|track| track.id.as_str()));
+        if let Some(next) = next {
+            self.prewarm(next);
+        }
+    }
     pub fn new(api: Arc<ApiService>, url_cache: UrlCache, track_cache: Arc<TrackCache>) -> Self {
         let http_client = crate::util::tls::builder()
             .pool_max_idle_per_host(4)
@@ -123,10 +148,14 @@ impl StreamManager {
 
     pub fn prewarm(&self, track: Track) {
         let id = track.id.clone();
-        let Some(generation) = self.prewarm_cache.lock().start(&id) else {
+        let quality = self.api.get_quality();
+        let mut cache = self.prewarm_cache.lock();
+        cache.ensure_quality(quality);
+        let Some(generation) = cache.start(&id) else {
             return;
         };
 
+        drop(cache);
         let this = self.clone();
         tokio::spawn(async move {
             let result = match this.create_stream_session(&track).await {
@@ -152,7 +181,9 @@ impl StreamManager {
     /// Its URL was resolved during session building, so the URL prefetcher
     /// can skip this id without risking a cold start.
     pub fn has_prewarm_ready(&self, track_id: &str) -> bool {
-        self.prewarm_cache.lock().has_ready(track_id)
+        let mut cache = self.prewarm_cache.lock();
+        cache.ensure_quality(self.api.get_quality());
+        cache.has_ready(track_id)
     }
 
     pub async fn is_track_offline(&self, track_id: &str) -> bool {
@@ -160,8 +191,10 @@ impl StreamManager {
     }
 
     pub async fn create_stream_session(&self, track: &Track) -> Result<PreparedStream> {
+        let quality = self.api.get_quality();
         {
             let mut cache = self.prewarm_cache.lock();
+            cache.ensure_quality(quality);
             if let Some(res) = cache.remove(&track.id) {
                 return Ok(res);
             }
@@ -212,12 +245,12 @@ impl StreamManager {
 
         // 2. Fallback to streaming.
         let duration_ms = track.duration.map(|d| d.as_millis() as u64);
-        let (url, mirror_urls, codec) = if let Some(cached) = self.url_cache.get(&track.id) {
+        let (url, mirror_urls, codec) = if let Some(cached) = self.url_cache.get(&track.id, quality) {
             cached
         } else {
             let info = self
                 .api
-                .fetch_track_stream_info(track.id.clone())
+                .fetch_track_stream_info(track.id.clone(), quality)
                 .await
                 .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e.to_string()))?;
             self.url_cache.insert(
@@ -225,6 +258,7 @@ impl StreamManager {
                 info.url.clone(),
                 info.mirror_urls.clone(),
                 info.codec.clone(),
+                quality,
             );
             (info.url, info.mirror_urls, info.codec)
         };
@@ -270,7 +304,32 @@ impl StreamManager {
 
 #[cfg(test)]
 mod tests {
-    use super::PrewarmCache;
+    use super::{PrewarmCache, AudioQuality};
+
+    #[test]
+    fn next_track_prepares_while_current_session_is_still_reserved() {
+        let mut cache = PrewarmCache::default();
+        cache.start("current").unwrap();
+        cache.retain_interest(Some("current"), Some("next"));
+        assert!(cache.start("next").is_some());
+        assert!(cache.contains("current"));
+        assert!(cache.contains("next"));
+        cache.retain_interest(Some("next"), Some("third"));
+        assert!(!cache.contains("current"));
+        assert!(cache.start("third").is_some());
+    }
+
+    #[test]
+    fn quality_change_rejects_prepared_and_in_flight_old_quality() {
+        let mut cache = PrewarmCache::default();
+        cache.ensure_quality(AudioQuality::Low);
+        let old = cache.start("next").unwrap();
+        cache.ensure_quality(AudioQuality::High);
+        assert!(!cache.contains("next"));
+        let current = cache.start("next").unwrap();
+        cache.finish("next", old, None);
+        assert_eq!(cache.in_flight.get("next"), Some(&current));
+    }
 
     #[test]
     fn stale_prewarm_finish_cannot_consume_a_new_attempt() {
@@ -302,6 +361,8 @@ mod tests {
         cache.start("track-7").expect("first attempt starts");
         cache.invalidate("track-7");
         assert!(!cache.has_ready("track-7"));
-        cache.start("track-7").expect("attempt restarts after invalidate");
+        cache
+            .start("track-7")
+            .expect("attempt restarts after invalidate");
     }
 }

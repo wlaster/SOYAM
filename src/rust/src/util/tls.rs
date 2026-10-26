@@ -43,7 +43,7 @@ const MOZILLA_BUNDLE: &[u8] = include_bytes!("../../../assets/certs/mozilla-cace
 pub fn builder() -> reqwest::ClientBuilder {
     let extra = extra_roots();
     if extra.is_empty() {
-        return reqwest::Client::builder();
+        return reqwest::Client::builder().tls_backend_rustls();
     }
     #[cfg(target_os = "android")]
     {
@@ -51,7 +51,9 @@ pub fn builder() -> reqwest::ClientBuilder {
     }
     #[cfg(not(target_os = "android"))]
     {
-        reqwest::Client::builder().tls_certs_merge(extra)
+        reqwest::Client::builder()
+            .tls_backend_rustls()
+            .tls_certs_merge(extra)
     }
 }
 

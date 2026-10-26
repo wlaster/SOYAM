@@ -12,6 +12,7 @@ import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/download_menu.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
+import 'package:yayma/src/features/core/views/widgets/track_list.dart';
 import 'package:yayma/src/features/core/views/widgets/track_tile.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
@@ -184,29 +185,39 @@ class _AlbumViewState extends State<AlbumView> {
                 final isAndroid = Platform.isAndroid;
 
                 final albumActions = [
-                  M3EButton.icon(
+                  IconButton(
+                    onPressed: () => unawaited(
+                      PlaybackController.playAlbum(int.parse(albumData.id)),
+                    ),
+                    tooltip: 'Слушать',
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(56, 56),
+                      iconSize: 26,
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
+                    ),
+                  ),
+                  IconButton(
                     onPressed: () =>
                         unawaited(_toggleAlbumLike(albumData, isLiked)),
+                    tooltip: isLiked ? 'В любимых' : 'В любимые',
                     icon: Icon(
                       isLiked
                           ? Icons.favorite_rounded
                           : Icons.favorite_border_rounded,
                     ),
-                    label: isAndroid
-                        ? const SizedBox.shrink()
-                        : Text(isLiked ? 'В любимых' : 'В любимые'),
-                    style: isLiked
-                        ? M3EButtonStyle.filled
-                        : M3EButtonStyle.outlined,
-                    size: M3EButtonSize.md,
-                    decoration: isLiked
-                        ? null
-                        : M3EButtonDecoration.styleFrom(
-                            backgroundColor: cs.onSurface.withValues(
-                              alpha: 0.1,
-                            ),
-                            foregroundColor: cs.onSurface,
-                          ),
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(56, 56),
+                      iconSize: 26,
+                      backgroundColor: isLiked
+                          ? cs.primary
+                          : cs.onSurface.withValues(alpha: 0.1),
+                      foregroundColor: isLiked ? cs.onPrimary : cs.onSurface,
+                      side: isLiked
+                          ? null
+                          : BorderSide(color: cs.outlineVariant),
+                    ),
                   ),
                   M3EButton.icon(
                     onPressed: () => unawaited(_copyAlbumLink(albumData)),
@@ -229,6 +240,18 @@ class _AlbumViewState extends State<AlbumView> {
                   ),
                 ];
                 final androidAlbumActions = [
+                  IconButton(
+                    onPressed: () => unawaited(
+                      PlaybackController.playAlbum(int.parse(albumData.id)),
+                    ),
+                    tooltip: 'Слушать',
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(64, 56),
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
+                    ),
+                  ),
                   IconButton(
                     onPressed: () =>
                         unawaited(_toggleAlbumLike(albumData, isLiked)),
@@ -306,13 +329,11 @@ class _AlbumViewState extends State<AlbumView> {
                         : albumActions,
                   ),
                   slivers: [
-                    SliverM3ESegmentedList(
-                      haptic: M3EHapticFeedback.light,
+                    AppSliverTrackList(
                       itemCount: albumData.tracks.length,
                       addAutomaticKeepAlives: false,
-                      color: Colors.transparent,
                       padding: EdgeInsets.symmetric(
-                        horizontal: context.isNarrow ? 0 : 16,
+                        horizontal: context.horizontalPadding,
                         vertical: 4,
                       ),
                       itemBuilder: (context, index) {

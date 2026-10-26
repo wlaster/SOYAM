@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/track_elements.dart';
+import 'package:yayma/src/features/core/views/widgets/track_title.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 
 /// Geometry of the mini player plate.
@@ -85,10 +86,7 @@ class MiniTrackTextInfo extends StatelessWidget {
                     meta.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
+                    style: trackTitleStyle(context, weight: FontWeight.bold),
                   ),
                 ),
                 TrackVersionWidget(version: meta.version, fontSize: 12),

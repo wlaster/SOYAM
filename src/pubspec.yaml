@@ -32,6 +32,8 @@ dependencies:
   window_manager: ^0.5.2
 
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
   build_runner: ^2.16.1
   flutter_launcher_icons: ^0.14.4
   flutter_lints: ^6.0.0
@@ -59,6 +61,56 @@ flutter:
 
   assets:
     - assets/icons/
+    - assets/fonts/GoogleSans-OFL.txt
+
+  fonts:
+    - family: Google Sans
+      fonts:
+        - asset: assets/fonts/GoogleSans.ttf
+          weight: 100
+        - asset: assets/fonts/GoogleSans.ttf
+          weight: 200
+        - asset: assets/fonts/GoogleSans.ttf
+          weight: 300
+        - asset: assets/fonts/GoogleSans.ttf
+          weight: 400
+        - asset: assets/fonts/GoogleSans.ttf
+          weight: 500
+        - asset: assets/fonts/GoogleSans.ttf
+          weight: 600
+        - asset: assets/fonts/GoogleSans.ttf
+          weight: 700
+        - asset: assets/fonts/GoogleSans.ttf
+          weight: 800
+        - asset: assets/fonts/GoogleSans.ttf
+          weight: 900
+        - asset: assets/fonts/GoogleSans-Italic.ttf
+          weight: 100
+          style: italic
+        - asset: assets/fonts/GoogleSans-Italic.ttf
+          weight: 200
+          style: italic
+        - asset: assets/fonts/GoogleSans-Italic.ttf
+          weight: 300
+          style: italic
+        - asset: assets/fonts/GoogleSans-Italic.ttf
+          weight: 400
+          style: italic
+        - asset: assets/fonts/GoogleSans-Italic.ttf
+          weight: 500
+          style: italic
+        - asset: assets/fonts/GoogleSans-Italic.ttf
+          weight: 600
+          style: italic
+        - asset: assets/fonts/GoogleSans-Italic.ttf
+          weight: 700
+          style: italic
+        - asset: assets/fonts/GoogleSans-Italic.ttf
+          weight: 800
+          style: italic
+        - asset: assets/fonts/GoogleSans-Italic.ttf
+          weight: 900
+          style: italic
 
   shaders:
     - shaders/vibe.frag

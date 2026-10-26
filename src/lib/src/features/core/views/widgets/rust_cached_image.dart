@@ -289,11 +289,7 @@ class _ShimmerLoader extends StatefulWidget {
   final double? height;
   final double borderRadius;
 
-  const _ShimmerLoader({
-    this.width,
-    this.height,
-    this.borderRadius = 0,
-  });
+  const _ShimmerLoader({this.width, this.height, this.borderRadius = 0});
 
   @override
   State<_ShimmerLoader> createState() => _ShimmerLoaderState();
@@ -312,12 +308,10 @@ class _ShimmerLoaderState extends State<_ShimmerLoader>
       vsync: this,
     );
     _controller.repeat();
-    _animation = Tween<double>(begin: -2, end: 2).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeInOut,
-      ),
-    );
+    _animation = Tween<double>(
+      begin: -2,
+      end: 2,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override

@@ -12,6 +12,8 @@ class CommonMediaCard extends StatefulWidget {
   final VoidCallback onTap;
   final double size;
   final bool isCircle;
+  final int? titleMaxLines;
+  final EdgeInsetsGeometry contentPadding;
 
   const CommonMediaCard({
     required this.title,
@@ -22,6 +24,8 @@ class CommonMediaCard extends StatefulWidget {
     this.coverUrl,
     this.size = 160,
     this.isCircle = false,
+    this.titleMaxLines = 1,
+    this.contentPadding = const EdgeInsets.all(8),
   });
 
   @override
@@ -55,7 +59,7 @@ class _CommonMediaCardState extends State<CommonMediaCard> {
         ).colorScheme.primary.withValues(alpha: 0.06),
         child: Container(
           width: widget.size,
-          padding: const EdgeInsets.all(8),
+          padding: widget.contentPadding,
           child: ValueListenableBuilder<bool>(
             valueListenable: _isHovered,
             builder: (context, hovered, _) {
@@ -64,9 +68,7 @@ class _CommonMediaCardState extends State<CommonMediaCard> {
                 builder: (context, pressed, _) {
                   return AnimatedScale(
                     scale: pressed ? 0.95 : (hovered ? 1.02 : 1.0),
-                    duration: Duration(
-                      milliseconds: pressed ? 90 : 220,
-                    ),
+                    duration: Duration(milliseconds: pressed ? 90 : 220),
                     curve: pressed ? Curves.easeOutCubic : Curves.easeOutBack,
                     child: Column(
                       crossAxisAlignment: widget.isCircle
@@ -91,11 +93,7 @@ class _CommonMediaCardState extends State<CommonMediaCard> {
                                       offset: const Offset(0, 14),
                                     ),
                                   ]
-                                : const [
-                                    BoxShadow(
-                                      color: Colors.transparent,
-                                    ),
-                                  ],
+                                : const [BoxShadow(color: Colors.transparent)],
                           ),
                           child: AnimatedScale(
                             duration: const Duration(milliseconds: 200),
@@ -121,8 +119,10 @@ class _CommonMediaCardState extends State<CommonMediaCard> {
                                 ? TextDecoration.underline
                                 : null,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          maxLines: widget.titleMaxLines,
+                          overflow: widget.titleMaxLines == null
+                              ? TextOverflow.visible
+                              : TextOverflow.ellipsis,
                           textAlign: widget.isCircle
                               ? TextAlign.center
                               : TextAlign.start,

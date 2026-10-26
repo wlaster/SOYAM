@@ -16,8 +16,10 @@ import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 import 'package:yayma/src/features/core/views/widgets/smooth_scroll.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
+import 'package:yayma/src/features/settings/views/ai_content_reduction_setting.dart';
 import 'package:yayma/src/features/settings/views/lyrics_providers_dialog.dart';
 import 'package:yayma/src/rust/api/content.dart' as rust;
+import 'package:yayma/src/rust/api/recommendations.dart' as recommendations;
 import 'package:yayma/src/rust/api/simple.dart' as simple;
 
 class SettingsView extends StatefulWidget {
@@ -32,7 +34,6 @@ class _SettingsViewState extends State<SettingsView> {
   late final FutureSignal<int> _cacheSizeSignal;
   late final FutureSignal<int> _trackCacheSizeSignal;
   late final FutureSignal<String> _versionSignal;
-  late final FutureSignal<bool> _discordRpcSignal;
   late final FutureSignal<bool> _customTitlebarSignal;
   late final FutureSignal<bool> _autoHideNavbarSignal;
   late final FutureSignal<bool> _closeToTraySignal;
@@ -66,11 +67,6 @@ class _SettingsViewState extends State<SettingsView> {
     _versionSignal = futureSignal(() async {
       return await simple.getAppVersion();
     });
-    _discordRpcSignal = futureSignal(() async {
-      final ctx = appContextSignal.value;
-      if (ctx == null) return false;
-      return await simple.isDiscordRpcEnabled(ctx: ctx);
-    });
     _customTitlebarSignal = futureSignal(() async {
       final ctx = appContextSignal.value;
       if (ctx == null) return true;
@@ -87,14 +83,6 @@ class _SettingsViewState extends State<SettingsView> {
       if (ctx == null) return true;
       return await simple.isUpdateCheckEnabled(ctx: ctx);
     });
-  }
-
-  Future<void> _toggleDiscordRpc(bool enabled) async {
-    final ctx = appContextSignal.value;
-    if (ctx != null) {
-      await simple.setDiscordRpcEnabled(ctx: ctx, enabled: enabled);
-      unawaited(_discordRpcSignal.refresh());
-    }
   }
 
   Future<void> _toggleCustomTitlebar(bool enabled) async {
@@ -368,28 +356,6 @@ class _SettingsViewState extends State<SettingsView> {
                     const SizedBox(height: 32),
                   ],
                   if (context.isDesktop) ...[
-                    const _SectionTitle(title: 'Интеграции'),
-                    const SizedBox(height: 20),
-                    SignalBuilder(
-                      builder: (context) {
-                        final enabled = _discordRpcSignal.value;
-                        return _SettingItem(
-                          title: 'Discord Rich Presence',
-                          subtitle: 'Показывать текущий трек в статусе Discord',
-                          icon: Icons.discord_rounded,
-                          onTap: () => unawaited(
-                            _toggleDiscordRpc(!(enabled.value ?? true)),
-                          ),
-                          trailing: Switch(
-                            value: enabled.value ?? true,
-                            onChanged: (v) => unawaited(_toggleDiscordRpc(v)),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 32),
-                  ],
-                  if (context.isDesktop) ...[
                     const _SectionTitle(title: 'Система'),
                     const SizedBox(height: 20),
                     SignalBuilder(
@@ -412,6 +378,29 @@ class _SettingsViewState extends State<SettingsView> {
                     ),
                     const SizedBox(height: 32),
                   ],
+                  const _SectionTitle(title: 'Рекомендации'),
+                  const SizedBox(height: 20),
+                  AiContentReductionSetting(
+                    read: () async {
+                      final ctx = appContextSignal.value;
+                      if (ctx == null) throw StateError('Not signed in');
+                      return await recommendations.getAiContentReduction(
+                        ctx: ctx,
+                      );
+                    },
+                    write: ({required enabled}) async {
+                      final ctx = appContextSignal.value;
+                      if (ctx == null) throw StateError('Not signed in');
+                      return await recommendations.setAiContentReduction(
+                        ctx: ctx,
+                        enabled: enabled,
+                      );
+                    },
+                    onSaveError: () => showAppError(
+                      'Не удалось сохранить «Меньше ИИ». Проверьте подключение и повторите.',
+                    ),
+                  ),
+                  const SizedBox(height: 32),
                   const _SectionTitle(title: 'Тексты песен'),
                   const SizedBox(height: 20),
                   _SettingItem(

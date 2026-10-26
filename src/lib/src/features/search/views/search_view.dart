@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:m3e_core/m3e_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 import 'package:yayma/src/features/core/providers/navigation_provider.dart';
@@ -11,6 +10,7 @@ import 'package:yayma/src/features/core/views/widgets/media_card.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 import 'package:yayma/src/features/core/views/widgets/smooth_scroll.dart';
 import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
+import 'package:yayma/src/features/core/views/widgets/track_list.dart';
 import 'package:yayma/src/features/core/views/widgets/track_tile.dart';
 import 'package:yayma/src/features/library/views/add_to_playlist_dialog.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
@@ -214,9 +214,6 @@ class _SearchResults extends StatelessWidget {
             SliverToBoxAdapter(
               child: HorizontalShelf(
                 height: 210,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                ), // 32 + 8 (internal card padding) = 40
                 itemCount: results.artists.length,
                 itemBuilder: (context, i) =>
                     _ArtistSearchCard(artist: results.artists[i]),
@@ -230,24 +227,19 @@ class _SearchResults extends StatelessWidget {
             SliverToBoxAdapter(
               child: HorizontalShelf(
                 height: 240,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                ), // 32 + 8 = 40
                 itemCount: results.albums.length,
                 itemBuilder: (context, i) =>
-                    _AlbumSearchCard(album: results.albums[i]),
+                    _AlbumSearchCard(album: results.albums[i], size: 160),
               ),
             ),
           ],
           if (results.tracks.isNotEmpty) ...[
             const SliverToBoxAdapter(child: CommonSectionTitle(title: 'Треки')),
-            SliverM3ESegmentedList(
-              haptic: M3EHapticFeedback.light,
+            AppSliverTrackList(
               itemCount: results.tracks.length,
               addAutomaticKeepAlives: false,
-              color: Colors.transparent,
               padding: EdgeInsets.symmetric(
-                horizontal: context.isNarrow ? 0 : 32,
+                horizontal: context.horizontalPadding,
                 vertical: 4,
               ),
               itemBuilder: (context, i) =>
@@ -302,13 +294,16 @@ class _TrackSearchTile extends StatelessWidget {
 
 class _AlbumSearchCard extends StatelessWidget {
   final SimpleAlbumDto album;
+  final double size;
 
-  const _AlbumSearchCard({required this.album});
+  const _AlbumSearchCard({required this.album, required this.size});
 
   @override
   Widget build(BuildContext context) {
     return CommonMediaCard(
       title: album.title,
+      contentPadding: const EdgeInsets.fromLTRB(0, 8, 16, 8),
+      size: size,
       artists: album.artists,
       coverUrl: album.coverUrl,
       onTap: () => navigateTo(AppSection.album, album.id),
@@ -325,6 +320,7 @@ class _ArtistSearchCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return CommonMediaCard(
       title: artist.name,
+      contentPadding: const EdgeInsets.fromLTRB(0, 8, 16, 8),
       subtitle: formatArtistCardSubtitle(
         monthlyListeners: artist.monthlyListeners,
         likesCount: artist.likesCount,

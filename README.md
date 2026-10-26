@@ -23,13 +23,18 @@
 ## Возможности
 
 - **Приватность**: никакой аналитики и слежки со стороны клиента
-- **Тексты песен**: несколько источников (LrcLib, BetterLyrics, YouLyPlus), включая пословную синхронизацию
-- **Интеграция с системой**: управление из панели задач Windows, Discord Rich Presence, глобальные горячие клавиши
+- **Тексты песен**: Яндекс Музыка, LRCLIB, Lyrics.ovh и Genius; выбор включённых источников прямо в панели текста. Тексты с таймкодами следуют воспроизведению и перемотке, обычные прокручиваются вручную. BetterLyrics и YouLyPlus доступны как дополнительные источники в настройках.
+- **Интеграция с системой**: управление из панели задач Windows, глобальные горячие клавиши
 
 ## Благодарности ❤️
 
 - [Vyfor](https://github.com/vyfor) — за исходный TUI-клиент [YaMusic](https://github.com/yamusic/yamusic) и библиотеку [yandex-music-rs](https://github.com/vyfor/yandex-music-rs) для работы с API Яндекса
 - [LrcLib](https://lrclib.net), [BetterLyrics](https://github.com/better-lyrics/better-lyrics), [YouLyPlus](https://github.com/ibratabian17/YouLyPlus) — за базы текстов песен
+- [Lyrics.ovh](https://lyrics.ovh) и [Genius](https://genius.com) — источники обычных текстов
+
+## Локальная сборка Windows и проверка текстов
+
+См. [инструкцию](docs/windows-build.md). Проверить доступность источников с вашего подключения можно командой `powershell -File scripts/Test-LyricsSources.ps1`.
 
 ## Лицензия
 

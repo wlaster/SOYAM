@@ -305,6 +305,8 @@ impl QueueManager {
         tracks: Vector<Track>,
         mut start_index: usize,
     ) -> Option<Track> {
+        let keep_shuffle = self.signals.is_shuffled()
+            && !matches!(&context, PlaybackContext::Wave(_));
         self.fetch.reset();
         self.url_prefetcher.reset();
         self.generation
@@ -366,7 +368,8 @@ impl QueueManager {
                     let hidden: Vec<Track> = tracks.into_iter().skip(visible_count).collect();
 
                     self.signals.set_queue(visible);
-                    self.signals.set_index(start_index.min(visible_count.saturating_sub(1).max(0)));
+                    self.signals
+                        .set_index(start_index.min(visible_count.saturating_sub(1).max(0)));
                     for t in hidden {
                         self.wave_buffer.push_back(t);
                     }
@@ -398,6 +401,7 @@ impl QueueManager {
             self.wave_by_seed(&seed_track);
         }
 
+        if keep_shuffle { self.toggle_shuffle(); }
         let start = self.signals.index();
         let track = self.signals.queue().get(start).cloned();
         if let Some(t) = &track {
@@ -518,7 +522,8 @@ impl QueueManager {
             if let Some(session) = session {
                 // Page response: keep the created session stable, only
                 // remember which batch delivered these tracks.
-                self.fetch.remember_wave_batch(&session.batch_id, &new_tracks);
+                self.fetch
+                    .remember_wave_batch(&session.batch_id, &new_tracks);
             }
             if !new_tracks.is_empty() {
                 self.wave_append(new_tracks);
@@ -751,6 +756,28 @@ impl QueueManager {
     /// station survives instead of falling back to `user:onyourwave`.
     /// Buffered tracks stay playable; stale finish/skip events belong to the
     /// dead batch and are dropped so they can't 400 the new session.
+    pub fn apply_wave_preferences(&mut self, session: Session) -> bool {
+        if !self.in_wave() || !is_usable_wave_session(&session) || session.sequence.is_empty() {
+            return false;
+        }
+        let tracks = session.sequence.iter().map(|item| item.track.clone()).collect();
+        let mut queue = self.signals.queue();
+        queue.truncate(self.signals.index() + 1);
+        self.fetch.reset();
+        self.url_prefetcher.reset();
+        self.generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.wave_buffer.clear();
+        self.wave_feedbacks.clear();
+        // The current song started in the previous session. Do not attribute
+        // its finish feedback to the newly created session.
+        self.wave_feedback_sent = true;
+        *self.playback_context.lock() = PlaybackContext::Wave(session.clone());
+        self.fetch.set_wave_session(session);
+        self.signals.set_queue(queue);
+        self.wave_append(tracks);
+        true
+    }
+
     async fn recreate_wave_session(&mut self) {
         if self.fetch.is_fetching() {
             return;
@@ -764,8 +791,7 @@ impl QueueManager {
         let clean: Vec<String> = seeds.iter().map(|s| clean_wave_seed(s)).collect();
         match self.api.create_session(clean).await {
             Ok(session) => {
-                let tracks: Vec<Track> =
-                    session.sequence.iter().map(|s| s.track.clone()).collect();
+                let tracks: Vec<Track> = session.sequence.iter().map(|s| s.track.clone()).collect();
                 if tracks.is_empty() {
                     error!("wave_session_recreate_empty");
                     return;
@@ -793,10 +819,8 @@ impl QueueManager {
         if failed.is_empty() {
             return;
         }
-        self.wave_feedbacks = fetch_policy::merge_failed_feedbacks(
-            std::mem::take(&mut self.wave_feedbacks),
-            failed,
-        );
+        self.wave_feedbacks =
+            fetch_policy::merge_failed_feedbacks(std::mem::take(&mut self.wave_feedbacks), failed);
     }
 
     /// Per-track `batchId` for immediate (`/feedback`) wave feedbacks.
@@ -876,9 +900,7 @@ impl QueueManager {
         let (current_id, candidate_ids, next_track) =
             fetch_policy::prefetch_window(&queue, current_index, URL_PREFETCH_WINDOW);
 
-        if let Some(next_track) = next_track {
-            self.stream_manager.prewarm(next_track);
-        }
+        self.stream_manager.update_prewarm_interest(current_id.as_deref(), next_track);
 
         // Division of labor with prewarm above: a ready decode session
         // already resolved + cached this track's URL, so don't spend a URL
@@ -978,6 +1000,37 @@ mod tests {
 
     fn standalone(n: usize) -> Vector<Track> {
         (0..n).map(|i| test_track(&format!("t{i}"))).collect()
+    }
+
+    #[tokio::test]
+    async fn ai_preference_refresh_keeps_current_song_and_position() {
+        let mut q = manager().await;
+        q.load(PlaybackContext::Standalone, standalone(3), 1).await;
+        let old_session: Session = serde_json::from_value(serde_json::json!({
+            "batchId":"old", "pumpkin":false, "radioSessionId":"old-session",
+            "sequence":[], "terminated":false
+        })).unwrap();
+        *q.playback_context.lock() = PlaybackContext::Wave(old_session.clone());
+        q.fetch.set_wave_session(old_session.clone());
+        q.signals.inner.set_current_track(Some(test_track("t1")));
+        q.signals.inner.update_progress(42000, 180000);
+        q.signals.inner.set_playing(true);
+        let mut new_session = old_session;
+        new_session.radio_session_id = Some("new-session".into());
+        new_session.batch_id = "new".into();
+        new_session.sequence = vec![yandex_music::model::rotor::session::SequenceItem {
+            liked:false, track:test_track("fresh"), item_type:"track".into(),
+            track_parameters: yandex_music::model::track::TrackParameters {
+                bpm:100, energy:0.5, hue:0.5, user_collection_hue:0,
+            },
+        }];
+        assert!(q.apply_wave_preferences(new_session));
+        assert_eq!(q.signals.index(), 1);
+        assert_eq!(q.signals.inner.current_track.get().unwrap().id, "t1");
+        assert_eq!(q.signals.inner.position_ms.get(), 42000);
+        assert!(q.signals.inner.is_playing.get());
+        assert_eq!(q.signals.queue().iter().map(|track| track.id.as_str()).collect::<Vec<_>>(), vec!["t0", "t1", "fresh"]);
+        assert!(q.wave_feedback_sent);
     }
 
     #[tokio::test]

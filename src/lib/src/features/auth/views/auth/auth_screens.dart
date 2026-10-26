@@ -736,7 +736,7 @@ class _YandexDeviceLoginDialogState extends State<YandexDeviceLoginDialog> {
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 4,
-                fontFamily: 'monospace',
+                fontFamily: 'Google Sans',
               ),
             ),
           ),
