@@ -314,7 +314,7 @@ class _FloatingNavBarState extends State<FloatingNavBar>
   }
 }
 
-class _AccountButton extends SignalWidget {
+class _AccountButton extends StatefulWidget {
   final VoidCallback onOpened;
   final VoidCallback onClosed;
 
@@ -325,69 +325,96 @@ class _AccountButton extends SignalWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final account = accountSignal.value;
-    if (account == null) return const SizedBox();
+  State<_AccountButton> createState() => _AccountButtonState();
+}
 
-    return InkWell(
-      onTap: () async {
-        onOpened();
-        await showDialog<void>(
-          context: context,
-          barrierColor: Colors.black54,
-          builder: (context) => _AccountMenuDialog(account: account),
-        );
-        onClosed();
-      },
-      customBorder: const CircleBorder(),
-      child: Container(
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: account.hasPlus
-              ? LinearGradient(
-                  colors: [
-                    Colors.purple,
-                    Colors.orange,
-                    Theme.of(context).colorScheme.primary,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          border: account.hasPlus
-              ? null
-              : Border.all(color: cs.onSurface.withValues(alpha: 0.1)),
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(2),
-          decoration: const BoxDecoration(
-            color: Colors.black,
+class _AccountButtonState extends State<_AccountButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) => SignalBuilder(
+    builder: (context) {
+      final cs = Theme.of(context).colorScheme;
+      final account = accountSignal.value;
+      if (account == null) return const SizedBox();
+
+      return MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: AnimatedContainer(
+          key: const ValueKey('profile-hover'),
+          duration: const Duration(milliseconds: 200),
+          width: 52,
+          height: 52,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
             shape: BoxShape.circle,
+            color: cs.primary.withValues(alpha: _hovered ? 0.18 : 0),
+            border: Border.all(
+              color: cs.primary.withValues(alpha: _hovered ? 0.35 : 0),
+            ),
           ),
-          child: ClipOval(
-            child: account.avatarUrl != null
-                ? RustCachedImage(
-                    imageUrl: account.avatarUrl,
-                    width: 36,
-                    height: 36,
-                    errorWidget: Icon(
-                      Icons.person_rounded,
-                      size: 20,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  )
-                : Icon(
-                    Icons.person_rounded,
-                    size: 20,
-                    color: cs.onSurfaceVariant,
-                  ),
+          child: InkWell(
+            onTap: () async {
+              widget.onOpened();
+              await showDialog<void>(
+                context: context,
+                barrierColor: Colors.black54,
+                builder: (context) => _AccountMenuDialog(account: account),
+              );
+              widget.onClosed();
+            },
+            customBorder: const CircleBorder(),
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: account.hasPlus
+                    ? LinearGradient(
+                        colors: [
+                          Colors.purple,
+                          Colors.orange,
+                          Theme.of(context).colorScheme.primary,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                border: account.hasPlus
+                    ? null
+                    : Border.all(color: cs.onSurface.withValues(alpha: 0.1)),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                  shape: BoxShape.circle,
+                ),
+                child: ClipOval(
+                  child: account.avatarUrl != null
+                      ? RustCachedImage(
+                          imageUrl: account.avatarUrl,
+                          width: 36,
+                          height: 36,
+                          errorWidget: Icon(
+                            Icons.person_rounded,
+                            size: 20,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        )
+                      : Icon(
+                          Icons.person_rounded,
+                          size: 20,
+                          color: cs.onSurfaceVariant,
+                        ),
+                ),
+              ),
+            ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    },
+  );
 }
 
 class _AccountMenuDialog extends StatelessWidget {

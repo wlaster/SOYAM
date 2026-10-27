@@ -9,6 +9,12 @@ pub enum AudioMessage {
         generation: u64,
         result: Result<(PlaybackContext, Vector<Track>, usize), String>,
     },
+    TrackWaveFetched {
+        generation: u64,
+        seed_id: String,
+        seeds: Vec<String>,
+        result: Result<(PlaybackContext, Vector<Track>, usize), String>,
+    },
     // Basic playback
     PlayPause,
     Pause,

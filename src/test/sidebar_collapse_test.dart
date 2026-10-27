@@ -1,4 +1,6 @@
 import 'package:flutter/gestures.dart';
+import 'package:yayma/src/app/session.dart';
+import 'package:yayma/src/rust/api/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:yayma/src/features/core/providers/navigation_provider.dart';
@@ -6,6 +8,35 @@ import 'package:yayma/src/features/core/views/layout/navigation_bar.dart';
 import 'package:yayma/src/features/core/views/widgets/sidebar_collapse.dart';
 
 void main() {
+  testWidgets('profile hover highlights a circle and clears on exit', (
+    tester,
+  ) async {
+    accountSignal.value = const UserAccountDto(
+      uid: 1,
+      login: 'test',
+      hasPlus: false,
+    );
+    addTearDown(() => accountSignal.value = null);
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: FloatingNavBar())),
+    );
+    final target = find.byKey(const ValueKey('profile-hover'));
+    BoxDecoration decoration() =>
+        tester.widget<AnimatedContainer>(target).decoration! as BoxDecoration;
+    expect(decoration().shape, BoxShape.circle);
+    expect(decoration().color!.a, 0);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(700, 100));
+    await mouse.moveTo(tester.getCenter(target));
+    await tester.pumpAndSettle();
+    expect(decoration().color!.a, closeTo(0.18, 0.01));
+    expect(decoration().shape, BoxShape.circle);
+    await mouse.moveTo(const Offset(700, 100));
+    await tester.pumpAndSettle();
+    expect(decoration().color!.a, 0);
+    await mouse.removePointer();
+  });
+
   testWidgets(
     'rail folds to selected button before sliding left and can reverse',
     (tester) async {

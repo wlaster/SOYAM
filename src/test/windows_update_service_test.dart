@@ -82,6 +82,31 @@ class Client extends Fake implements HttpClient {
 }
 
 void main() {
+  test(
+    'downloads stable installer using GitHub digest without SHA files',
+    () async {
+      final data = release();
+      final stableUrl = assetUrl.replaceAll(name, 'soyam-windows-setup.exe');
+      final raw = (data['assets'] as List).first as Map<String, dynamic>;
+      raw['name'] = 'soyam-windows-setup.exe';
+      raw['browser_download_url'] = stableUrl;
+      final asset = WindowsUpdateService.parseAsset(data, '1.2.0');
+      expect(asset.name, 'soyam-windows-setup.exe');
+      expect(asset.checksumUrl, isNull);
+      final temp = Directory.systemTemp.createTempSync('soyam-stable-update-');
+      try {
+        final file = await WindowsUpdateService.download(
+          asset,
+          directory: temp,
+          client: Client({stableUrl: Response(payload)}),
+        );
+        expect(await file.readAsBytes(), payload);
+      } finally {
+        temp.deleteSync(recursive: true);
+      }
+    },
+  );
+
   late Directory directory;
   setUp(
     () => directory = Directory.systemTemp.createTempSync('soyam-update-test-'),

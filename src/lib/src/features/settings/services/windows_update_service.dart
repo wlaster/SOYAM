@@ -63,7 +63,13 @@ class WindowsUpdateService {
         release['prerelease'] == true) {
       throw const UpdateException('Версия релиза не соответствует обновлению.');
     }
-    final name = 'soyam-windows-setup-$normalized.exe';
+    final legacyName = 'soyam-windows-setup-$normalized.exe';
+    final name =
+        (release['assets'] as List).whereType<Map<String, dynamic>>().any(
+          (asset) => asset['name'] == 'soyam-windows-setup.exe',
+        )
+        ? 'soyam-windows-setup.exe'
+        : legacyName;
     final assets = (release['assets'] as List)
         .whereType<Map<String, dynamic>>()
         .toList();
@@ -183,7 +189,7 @@ class WindowsUpdateService {
     if (!_trustedAsset(asset.url) ||
         (asset.checksumUrl != null && !_trustedAsset(asset.checksumUrl!)) ||
         !RegExp(
-          r'^soyam-windows-setup-\d+\.\d+\.\d+\.exe$',
+          r'^soyam-windows-setup(?:-\d+\.\d+\.\d+)?\.exe$',
         ).hasMatch(asset.name)) {
       throw const UpdateException('Некорректный установщик обновления.');
     }

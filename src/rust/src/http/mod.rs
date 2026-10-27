@@ -169,6 +169,7 @@ pub struct ApiService {
     pub http_client: reqwest::Client,
     user_id: u64,
     pub quality: RwLock<AudioQuality>,
+    pub(crate) like_mutation_lock: tokio::sync::Mutex<()>,
     ai_content_reduction: RwLock<Option<bool>>,
     ai_settings_lock: tokio::sync::Mutex<()>,
     ai_revision: std::sync::atomic::AtomicU64,
@@ -269,6 +270,7 @@ impl ApiService {
             http_client,
             user_id,
             quality,
+            like_mutation_lock: tokio::sync::Mutex::new(()),
             ai_content_reduction: RwLock::new(None),
             ai_settings_lock: tokio::sync::Mutex::new(()),
             ai_revision: std::sync::atomic::AtomicU64::new(0),
@@ -773,9 +775,17 @@ impl ApiService {
     }
 
     pub async fn remove_like_track(&self, track_id: String) -> Result<()> {
-        let opts = RemoveLikedTracksOptions::new(self.user_id, vec![track_id]);
-        // Same revision check as above: Err if no `revision` in response.
+        // Yandex can group related versions when removing a like. Snapshot the
+        // server list and restore every distinct ID except the requested one.
+        let before = self.fetch_liked_ids().await?;
+        let opts = RemoveLikedTracksOptions::new(self.user_id, vec![track_id.clone()]);
         let _revision: u64 = self.client.remove_liked_tracks(&opts).await?;
+        let after = self.fetch_liked_ids().await?;
+        let restore = collateral_unlikes(&before, &after, &track_id);
+        if !restore.is_empty() {
+            let opts = AddLikedTracksOptions::new(self.user_id, restore);
+            self.client.add_liked_tracks(&opts).await?;
+        }
         Ok(())
     }
 
@@ -1041,10 +1051,25 @@ impl ApiService {
     }
 }
 
+fn collateral_unlikes(before: &[String], after: &[String], removed: &str) -> Vec<String> {
+    use crate::util::track::CleanId;
+    let after: std::collections::HashSet<&str> = after.iter().map(|id| id.to_base_id()).collect();
+    before.iter().filter(|id| id.to_base_id() != removed.to_base_id()
+        && !after.contains(id.to_base_id())).cloned().collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn unlike_restores_other_versions_but_never_requested_track() {
+        let before = vec!["154773901:43778408".into(), "155352126:43778408".into(), "other".into()];
+        let after = vec!["other".into()];
+        assert_eq!(collateral_unlikes(&before, &after, "154773901:43778408"), vec!["155352126:43778408"]);
+        assert!(collateral_unlikes(&before, &before[1..], "154773901").is_empty());
+    }
 
     #[test]
     fn extracts_wrapped_albums_from_top_level_array() {

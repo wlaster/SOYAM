@@ -431,6 +431,21 @@ impl AudioSystem {
                     self.signals.set_buffering(false);
                 }
             },
+            AudioMessage::TrackWaveFetched { generation, seed_id, seeds, result } => {
+                if self.context_generation.load(Ordering::Acquire) != generation
+                    || self.signals.current_track.get().is_none_or(|track| track.id != seed_id)
+                { return; }
+                match result {
+                    Ok((ctx, tracks, _)) => {
+                        if let Some(current) = self.signals.current_track.get() {
+                            self.queue.load_track_wave(ctx, tracks, current).await;
+                            self.signals.current_wave_seeds.set(seeds);
+                            self.send_wave_started();
+                        }
+                    }
+                    Err(error) => (self.error_sink)(error),
+                }
+            }
             AudioMessage::PlayPause => {
                 if self.signals.is_playing.get() {
                     self.controller.pause().await;
@@ -550,12 +565,30 @@ impl AudioSystem {
             AudioMessage::StartWave(seeds) => {
                 let generation = self.begin_context_change();
                 let yandex = self.yandex.clone();
-                self.spawn_fetch_context(generation, move || async move {
-                    yandex
-                        .fetch_wave_context(seeds)
-                        .await
-                        .map_err(|e| format!("Failed to start wave: {e}"))
+                let current = self.signals.current_track.get().filter(|track| {
+                    seeds.len() == 1 && crate::audio::queue::clean_wave_seed(&seeds[0])
+                        == format!("track:{}", crate::util::track::CleanId::to_base_id(track.id.as_str()))
                 });
+                if let Some(current) = current {
+                    let tx = self.tx.clone();
+                    tokio::spawn(async move {
+                        let clean = seeds.iter().map(|seed| crate::audio::queue::clean_wave_seed(seed)).collect();
+                        let result = yandex.api.create_session(clean).await
+                            .and_then(|session| {
+                                if session.sequence.is_empty() { return Err("Wave session is empty".into()); }
+                                let tracks = session.sequence.iter().map(|item| item.track.clone()).collect();
+                                Ok((crate::audio::queue::PlaybackContext::Wave(session), tracks, 0))
+                            }).map_err(|e| format!("Failed to start wave: {e}"));
+                        let _ = tx.send(AudioMessage::TrackWaveFetched {
+                            generation, seed_id: current.id, seeds, result,
+                        }).await;
+                    });
+                } else {
+                    self.spawn_fetch_context(generation, move || async move {
+                        yandex.fetch_wave_context(seeds).await
+                            .map_err(|e| format!("Failed to start wave: {e}"))
+                    });
+                }
             }
             AudioMessage::RefreshWavePreferences => {
                 if self.queue.in_wave() {
@@ -834,6 +867,7 @@ impl AudioSystem {
         signals: AudioSignals,
         db_arc: Arc<tokio::sync::Mutex<crate::db::AppDatabase>>,
     ) {
+        let _mutation = api.like_mutation_lock.lock().await;
         // Revision-gated sync (official-client style): when our revision is
         // current the server answers `likedTracks: {info}` with no `values`
         // → skip DB + rebuild entirely.

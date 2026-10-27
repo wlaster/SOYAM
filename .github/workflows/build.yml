@@ -94,19 +94,15 @@ jobs:
           flutter build windows --release
         shell: powershell
 
-      - name: Archive
-        run: |
-          $VERSION = $env:GITHUB_REF -replace 'refs/tags/v', ''
-          if ($VERSION -eq $env:GITHUB_REF) { $VERSION = "manual" }
-          "VERSION=$VERSION" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Compress-Archive -Path "src\build\windows\x64\runner\Release\*" -DestinationPath "soyam-windows-x64-$VERSION.zip"
+      - name: Package Portable
+        run: ./scripts/Package-Windows.ps1
         shell: powershell
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: windows_x64_release
-          path: soyam-windows-*.zip
+          path: dist/soyam-windows-x64-portable.zip
 
       - name: Build Installer
         run: |
@@ -119,7 +115,6 @@ jobs:
           name: windows_x64_installer
           path: |
             dist/soyam-windows-setup*.exe
-            dist/soyam-windows-setup*.exe.sha256
 
   build-android:
     runs-on: ubuntu-latest

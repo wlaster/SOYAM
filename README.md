@@ -47,7 +47,7 @@
 
 ## Локальная сборка Windows и проверка текстов
 
-См. [инструкцию](docs/windows-build.md). Полная сборка: `powershell -File scripts/Build-Windows.ps1`. Упаковка готовой Release-сборки с библиотеками MSVC x64: `powershell -File scripts/Package-Windows.ps1`. Скрипт проверяет SHA-256 каждого файла внутри ZIP и создаёт файл `.zip.sha256`. Проверить доступность источников с вашего подключения можно командой `powershell -File scripts/Test-LyricsSources.ps1`.
+См. [инструкцию](docs/windows-build.md). Полная сборка: `powershell -File scripts/Build-Windows.ps1`. Упаковка готовой Release-сборки с библиотеками MSVC x64: `powershell -File scripts/Package-Windows.ps1`. Скрипт проверяет SHA-256 каждого файла внутри ZIP. Проверить доступность источников с вашего подключения можно командой `powershell -File scripts/Test-LyricsSources.ps1`.
 
 Собрать установщик из готовой Release-сборки: `powershell -File scripts/Build-Installer.ps1`. Требуется Inno Setup 6 и библиотека MSVC x64 из Visual Studio Build Tools. Скрипт проверяет совпадение версии EXE с `pubspec.yaml` и создаёт установщик с файлом SHA-256; ZIP при этом не создаётся.
 

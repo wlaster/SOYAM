@@ -382,7 +382,7 @@ class PixelPerfectVibePainter extends CustomPainter {
   final double devicePixelRatio;
   final double renderScale;
   static const _rotData = [-0.3, 0.3, 0.4, -0.3, -0.3, -0.4, -0.3, -0.3, 0.4];
-  static const _viewScale = 0.4;
+  static const _viewScale = 0.44;
 
   // Fraction of *physical* pixels to shade before upscaling. Applied against
   // size * devicePixelRatio (not raw logical size) so screens with a high

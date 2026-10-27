@@ -5,7 +5,7 @@ $release = Join-Path $repoRoot 'src/build/windows/x64/runner/Release'
 $versionMatch = Select-String -LiteralPath (Join-Path $repoRoot 'src/pubspec.yaml') -Pattern '^version:\s*([^+\s]+)'
 if (-not $versionMatch) { throw 'Version missing from pubspec.yaml' }
 $version = $versionMatch.Matches[0].Groups[1].Value
-$stem = "soyam-windows-x64-$version-portable"
+$stem = 'soyam-windows-x64-portable'
 $dist = Join-Path $repoRoot 'dist'
 $portable = Join-Path $dist $stem
 $archive = Join-Path $dist "$stem.zip"
@@ -66,7 +66,6 @@ try {
     }
 } finally { $zip.Dispose() }
 $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-"$hash  $stem.zip" | Set-Content -LiteralPath "$archive.sha256" -Encoding ascii
 Write-Output "Executable: $portable\soyam.exe"
 Write-Output "Archive: $archive"
 Write-Output "SHA256: $hash"

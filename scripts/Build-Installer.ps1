@@ -34,8 +34,7 @@ if (-not $RuntimeDirectory) {
 foreach ($dll in @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
     if (-not $RuntimeDirectory -or -not (Test-Path -LiteralPath (Join-Path $RuntimeDirectory $dll))) { throw "MSVC x64 runtime missing: $dll" }
 }
-$installer = Join-Path $repoRoot "dist/soyam-windows-setup-$version.exe"
-if (Test-Path -LiteralPath $installer) { throw "Installer already exists: $installer" }
+$installer = Join-Path $repoRoot 'dist/soyam-windows-setup.exe'
 & $Compiler "/DAppVersion=$version" "/DReleaseDir=$release" "/DRuntimeDir=$RuntimeDirectory" (Join-Path $repoRoot 'packaging/windows/yayma.iss')
 if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed: $LASTEXITCODE" }
 if (-not (Test-Path -LiteralPath $installer)) { throw 'Installer was not produced' }
@@ -43,12 +42,5 @@ $installerInfo = (Get-Item -LiteralPath $installer).VersionInfo
 $installerVersion = "$($installerInfo.FileMajorPart).$($installerInfo.FileMinorPart).$($installerInfo.FileBuildPart)"
 if ($installerVersion -ne $version) { throw "Installer version $installerVersion does not match $version" }
 $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
-"$hash  $([IO.Path]::GetFileName($installer))" | Set-Content -LiteralPath "$installer.sha256" -Encoding ascii
 Write-Output "Installer: $installer"
 Write-Output "SHA256: $hash"
-
-# Stable filename for the README's latest-release download button.
-$alias = Join-Path $repoRoot 'dist/soyam-windows-setup.exe'
-Copy-Item -LiteralPath $installer -Destination $alias -Force
-"$hash  soyam-windows-setup.exe" | Set-Content -LiteralPath "$alias.sha256" -Encoding ascii
-Write-Output "Latest installer alias: $alias"

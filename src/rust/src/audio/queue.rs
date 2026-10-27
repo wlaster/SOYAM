@@ -411,6 +411,21 @@ impl QueueManager {
         track
     }
 
+    pub async fn load_track_wave(
+        &mut self,
+        context: PlaybackContext,
+        tracks: Vector<Track>,
+        current: Track,
+    ) {
+        use crate::util::track::CleanId;
+        let mut queue = Vector::new();
+        queue.push_back(current.clone());
+        queue.extend(tracks.into_iter().filter(|t| t.id.to_base_id() != current.id.to_base_id()));
+        self.load(context, queue, 0).await;
+        // The seed is already playing and was not started by this radio session.
+        self.wave_feedback_sent = true;
+    }
+
     fn wave_by_seed(&self, seed_track: &Track) {
         let track_id = seed_track.id.clone();
         let generation = self.generation.load(std::sync::atomic::Ordering::Relaxed);
@@ -1000,6 +1015,32 @@ mod tests {
 
     fn standalone(n: usize) -> Vector<Track> {
         (0..n).map(|i| test_track(&format!("t{i}"))).collect()
+    }
+
+    #[tokio::test]
+    async fn track_wave_keeps_playhead_and_pause_state_and_excludes_seed_duplicates() {
+        for playing in [true, false] {
+            let mut q = manager().await;
+            q.load(PlaybackContext::Standalone, standalone(3), 1).await;
+            q.signals.inner.set_current_track(Some(test_track("t1")));
+            q.signals.inner.update_progress(42000, 180000);
+            q.signals.inner.set_playing(playing);
+            let session: Session = serde_json::from_value(serde_json::json!({
+                "batchId":"new", "pumpkin":false, "radioSessionId":"radio",
+                "sequence":[], "terminated":false
+            })).unwrap();
+            let recommendations = [test_track("fresh"), test_track("t1:album"), test_track("next")]
+                .into_iter().collect();
+            q.load_track_wave(PlaybackContext::Wave(session), recommendations, test_track("t1")).await;
+            assert_eq!(q.signals.index(), 0);
+            assert_eq!(q.signals.inner.current_track.get().unwrap().id, "t1");
+            assert_eq!(q.signals.inner.position_ms.get(), 42000);
+            assert_eq!(q.signals.inner.is_playing.get(), playing);
+            assert_eq!(q.signals.queue().iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+                vec!["t1", "fresh", "next"]);
+            assert!(q.wave_feedback_sent);
+            assert!(q.in_wave());
+        }
     }
 
     #[tokio::test]

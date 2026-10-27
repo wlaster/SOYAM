@@ -40,6 +40,7 @@ pub async fn track_is_liked(ctx: &AppContext, track_id: String) -> bool {
 /// optimistic state is rolled back and `false` is returned so the caller can
 /// revert its own optimistic UI.
 pub async fn toggle_like(ctx: &AppContext, track_id: String) -> bool {
+    let _mutation = ctx.core.api.like_mutation_lock.lock().await;
     let is_liked = {
         let state = ctx.audio.state.read().await;
         state.liked.is_liked(&track_id)
@@ -86,6 +87,7 @@ pub async fn toggle_like(ctx: &AppContext, track_id: String) -> bool {
     } else {
         api.add_like_track(entity_id.clone()).await
     };
+    drop(_mutation);
     let confirmed = match api_result {
         Ok(_) => {
             let msg = if is_liked {
