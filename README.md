@@ -9,9 +9,9 @@
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/ui_home.webp" width="280" alt="Главный экран"/></td>
-    <td align="center"><img src="docs/screenshots/ui_search.webp" width="280" alt="Поиск"/></td>
-    <td align="center"><img src="docs/screenshots/ui_artist.webp" width="280" alt="Страница исполнителя"/></td>
+    <td align="center"><img src="docs/screenshots/ui_home.webp?v=a1d8c39" width="280" alt="Главный экран"/></td>
+    <td align="center"><img src="docs/screenshots/ui_search.webp?v=a1d8c39" width="280" alt="Поиск"/></td>
+    <td align="center"><img src="docs/screenshots/ui_artist.webp?v=a1d8c39" width="280" alt="Страница исполнителя"/></td>
   </tr>
 </table>
 
