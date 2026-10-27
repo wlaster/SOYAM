@@ -358,6 +358,33 @@ class CommonVolumeSlider extends StatefulWidget {
 
 class _CommonVolumeSliderState extends State<CommonVolumeSlider> {
   double? _dragVolume;
+  Timer? _labelTimer;
+  bool _showLabel = false;
+
+  void _showVolume(double value) {
+    _labelTimer?.cancel();
+    setState(() {
+      _dragVolume = value;
+      _showLabel = true;
+    });
+    _labelTimer = Timer(const Duration(milliseconds: 650), () {
+      if (mounted) setState(() => _showLabel = false);
+    });
+  }
+
+  void _finishDrag() {
+    _labelTimer?.cancel();
+    setState(() {
+      _dragVolume = null;
+      _showLabel = false;
+    });
+  }
+
+  @override
+  void dispose() {
+    _labelTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -370,22 +397,25 @@ class _CommonVolumeSliderState extends State<CommonVolumeSlider> {
 
         return SizedBox(
           width: widget.width,
-          child: M3ESlider(
-            value: displayVolume.clamp(0, 100),
-            max: 100,
-            decoration: expressSliderDecoration(
-              activeColor: activeColor,
-              inactiveColor: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.15),
+          child: Listener(
+            onPointerCancel: (_) => _finishDrag(),
+            child: M3ESlider(
+              value: displayVolume.clamp(0, 100),
+              max: 100,
+              label: _showLabel ? '${displayVolume.round()}' : null,
+              decoration: expressSliderDecoration(
+                activeColor: activeColor,
+                inactiveColor: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.15),
+              ),
+              onChangeStart: _showVolume,
+              onChanged: (val) {
+                if (_dragVolume != val) _showVolume(val);
+                unawaited(PlaybackController.changeVolume(val.round()));
+              },
+              onChangeEnd: (_) => _finishDrag(),
             ),
-            onChanged: (val) {
-              setState(() => _dragVolume = val);
-              unawaited(PlaybackController.changeVolume(val.toInt()));
-            },
-            onChangeEnd: (_) {
-              setState(() => _dragVolume = null);
-            },
           ),
         );
       },

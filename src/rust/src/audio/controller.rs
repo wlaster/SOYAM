@@ -562,7 +562,7 @@ impl AudioController {
         let volume = if muted {
             0.0
         } else {
-            let user_volume = self.signals.volume.get() as f32 / 100.0;
+            let user_volume = perceptual_volume_gain(self.signals.volume.get());
             let transient_gain = self.transient_volume_gain.load(Ordering::Relaxed) as f32 / 100.0;
             user_volume * transient_gain
         };
@@ -583,4 +583,27 @@ fn copy_fx_params(old: &EffectHandle, new: &EffectHandle) -> Vec<f32> {
         new.set_param(i, val);
     }
     old_values[..n].to_vec()
+}
+
+// Give quiet listening more slider travel while retaining silence and full gain.
+fn perceptual_volume_gain(volume: u8) -> f32 {
+    let normalized = volume.min(100) as f32 / 100.0;
+    normalized * normalized
+}
+
+#[cfg(test)]
+mod volume_tests {
+    use super::perceptual_volume_gain;
+
+    #[test]
+    fn quiet_volume_has_finer_gain_without_losing_full_scale() {
+        assert_eq!(perceptual_volume_gain(0), 0.0);
+        assert!((perceptual_volume_gain(1) - 0.0001).abs() < 0.000001);
+        assert!((perceptual_volume_gain(10) - 0.01).abs() < 0.000001);
+        assert_eq!(perceptual_volume_gain(100), 1.0);
+        assert_eq!(perceptual_volume_gain(255), 1.0);
+        for value in 1..=100 {
+            assert!(perceptual_volume_gain(value) > perceptual_volume_gain(value - 1));
+        }
+    }
 }

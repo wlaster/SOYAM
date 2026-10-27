@@ -280,13 +280,19 @@ class _HomeTrackHeaderState extends State<_HomeTrackHeader> {
                               waitDuration: const Duration(milliseconds: 500),
                               child: Text(
                                 meta.title,
-                                style: trackTitleStyle(
-                                  context,
-                                  weight: FontWeight.w900,
-                                  decoration: hovered && meta.albumId != null
-                                      ? TextDecoration.underline
-                                      : null,
-                                ),
+                                style:
+                                    trackTitleStyle(
+                                      context,
+                                      weight: FontWeight.w900,
+                                      decoration:
+                                          hovered && meta.albumId != null
+                                          ? TextDecoration.underline
+                                          : null,
+                                    ).copyWith(
+                                      fontSize: widget.small
+                                          ? (widget.isNarrow ? 12 : 16)
+                                          : (widget.isNarrow ? 14 : 22),
+                                    ),
                                 maxLines: 1,
                                 softWrap: false,
                                 overflow: TextOverflow.ellipsis,

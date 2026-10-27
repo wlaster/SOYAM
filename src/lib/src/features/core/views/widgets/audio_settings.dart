@@ -6,6 +6,7 @@ import 'package:signals_flutter/signals_flutter.dart';
 import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/horizontal_scroll_fade.dart';
 import 'package:yayma/src/features/core/views/widgets/smooth_scroll.dart';
+import 'package:yayma/src/features/playback/providers/equalizer_profiles.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 import 'package:yayma/src/rust/api/models.dart';
 
@@ -19,8 +20,6 @@ class AudioSettingsDialog extends StatefulWidget {
 }
 
 class _AudioSettingsDialogState extends State<AudioSettingsDialog> {
-  int _activeTab = 0; // 0: EQ, 1: FX
-
   @override
   Widget build(BuildContext context) {
     return SignalBuilder(
@@ -56,7 +55,6 @@ class _AudioSettingsDialogState extends State<AudioSettingsDialog> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: TabBar(
-                        onTap: (i) => setState(() => _activeTab = i),
                         indicator: UnderlineTabIndicator(
                           borderRadius: BorderRadius.circular(4),
                           borderSide: BorderSide(
@@ -86,15 +84,6 @@ class _AudioSettingsDialogState extends State<AudioSettingsDialog> {
                         ),
                       ),
                     ),
-                    if (_activeTab == 0)
-                      TextButton(
-                        onPressed: () =>
-                            unawaited(PlaybackController.resetEqualizer()),
-                        child: Text(
-                          'Сбросить',
-                          style: TextStyle(color: cs.error),
-                        ),
-                      ),
                   ],
                 ),
               );
@@ -123,7 +112,6 @@ class _AudioSettingsDialogState extends State<AudioSettingsDialog> {
                   ),
                 ),
                 TabBar(
-                  onTap: (i) => setState(() => _activeTab = i),
                   indicator: UnderlineTabIndicator(
                     borderRadius: BorderRadius.circular(4),
                     borderSide: BorderSide(
@@ -147,12 +135,6 @@ class _AudioSettingsDialogState extends State<AudioSettingsDialog> {
               ),
             ),
             actions: [
-              if (_activeTab == 0)
-                TextButton(
-                  onPressed: () =>
-                      unawaited(PlaybackController.resetEqualizer()),
-                  child: Text('Сбросить', style: TextStyle(color: cs.error)),
-                ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Закрыть'),
@@ -165,8 +147,287 @@ class _AudioSettingsDialogState extends State<AudioSettingsDialog> {
   }
 }
 
-class _EqualizerView extends StatelessWidget {
+class _EqualizerView extends StatefulWidget {
   const _EqualizerView();
+
+  @override
+  State<_EqualizerView> createState() => _EqualizerViewState();
+}
+
+class _EqualizerViewState extends State<_EqualizerView> {
+  final _profiles = EqualizerProfiles();
+  bool _loaded = false;
+  bool _busy = false;
+
+  EqualizerProfile? get _selected {
+    for (final profile in _profiles.all) {
+      if (profile.id == _profiles.selectedId) return profile;
+    }
+    return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadProfiles());
+  }
+
+  Future<void> _loadProfiles() async {
+    try {
+      await _profiles.load();
+      final gains = equalizerSignal.value?.bands.map((b) => b.gainDb).toList();
+      bool matches(EqualizerProfile profile) =>
+          gains != null &&
+          gains.length == profile.gains.length &&
+          List.generate(
+            gains.length,
+            (i) => (gains[i] - profile.gains[i]).abs() < 0.05,
+          ).every((match) => match);
+      if (_selected == null || !matches(_selected!)) {
+        _profiles.selectedId = null;
+        for (final profile in _profiles.all) {
+          if (matches(profile)) {
+            _profiles.selectedId = profile.id;
+            break;
+          }
+        }
+      }
+    } on Object catch (_) {
+      if (mounted) _error('Не удалось загрузить свои профили');
+    }
+    if (mounted) setState(() => _loaded = true);
+  }
+
+  void _error(String message) {
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _save() async {
+    try {
+      await _profiles.save();
+    } on Object catch (_) {
+      if (mounted) _error('Не удалось сохранить профиль');
+    }
+  }
+
+  Future<void> _apply(EqualizerProfile profile) async {
+    setState(() => _busy = true);
+    try {
+      for (var i = 0; i < profile.gains.length; i++) {
+        await PlaybackController.setEqualizerBand(i, profile.gains[i]);
+      }
+      _profiles.selectedId = profile.id;
+      await _save();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<String?> _askName(String initial) async {
+    final controller = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Свой профиль'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          decoration: const InputDecoration(labelText: 'Название'),
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) Navigator.pop(context, value.trim());
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                Navigator.pop(context, controller.text.trim());
+              }
+            },
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    // The closing dialog still uses the controller during its exit transition.
+    Future<void>.delayed(const Duration(seconds: 1), controller.dispose);
+    return result;
+  }
+
+  Future<void> _create() async {
+    final name = await _askName('Мой профиль ${_profiles.custom.length + 1}');
+    if (name == null || !mounted || !_profiles.canCreate) return;
+    final gains = equalizerSignal.value!.bands
+        .map((band) => band.gainDb)
+        .toList();
+    final profile = _profiles.create(name, gains);
+    await _apply(profile);
+  }
+
+  Future<void> _copyTo(String destination) async {
+    final source = _selected;
+    if (source == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Заменить настройки профиля?'),
+        content: const Text(
+          'Текущие настройки выбранного своего профиля будут заменены.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Копировать'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    _profiles.copyTo(source, destination);
+    await _apply(_profiles.all.firstWhere((p) => p.id == destination));
+  }
+
+  void _changeBand(int index, double value) {
+    final selected = _selected;
+    if (selected == null || selected.builtIn) return;
+    final gains = List<double>.of(selected.gains)..[index] = value;
+    _profiles.update(selected.id, gains);
+    unawaited(PlaybackController.setEqualizerBand(index, value));
+  }
+
+  Widget _buildProfiles() {
+    final selected = _selected;
+    final editable = selected != null && !selected.builtIn;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey(_profiles.selectedId),
+                  initialValue: _profiles.selectedId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Профиль эквалайзера',
+                    isDense: true,
+                  ),
+                  hint: const Text('Текущие настройки'),
+                  items: _profiles.all
+                      .map(
+                        (profile) => DropdownMenuItem(
+                          value: profile.id,
+                          child: Text(
+                            profile.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: !_loaded || _busy
+                      ? null
+                      : (id) {
+                          if (id != null) {
+                            unawaited(
+                              _apply(
+                                _profiles.all.firstWhere((p) => p.id == id),
+                              ),
+                            );
+                          }
+                        },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Создать свой профиль ($_customCount/4)',
+                onPressed: _loaded && !_busy && _profiles.canCreate
+                    ? _create
+                    : null,
+                icon: const Icon(Icons.add_rounded),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Копировать настройки в свой профиль',
+                enabled:
+                    !_busy &&
+                    selected != null &&
+                    (_profiles.canCreate ||
+                        _profiles.custom.any((p) => p.id != selected.id)),
+                icon: const Icon(Icons.copy_rounded),
+                onSelected: (id) =>
+                    id == 'new' ? unawaited(_create()) : unawaited(_copyTo(id)),
+                itemBuilder: (context) => [
+                  if (_profiles.canCreate)
+                    const PopupMenuItem(
+                      value: 'new',
+                      child: Text('В новый профиль'),
+                    ),
+                  ..._profiles.custom
+                      .where((p) => p.id != selected?.id)
+                      .map(
+                        (p) => PopupMenuItem(value: p.id, child: Text(p.name)),
+                      ),
+                ],
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Управление своим профилем',
+                enabled: editable && !_busy,
+                onSelected: (action) async {
+                  if (action == 'rename') {
+                    final name = await _askName(selected!.name);
+                    if (name == null || !mounted) return;
+                    _profiles.update(selected.id, selected.gains, name: name);
+                  } else if (action == 'reset') {
+                    _profiles.update(selected!.id, List.filled(15, 0));
+                    await _apply(
+                      _profiles.all.firstWhere((p) => p.id == selected.id),
+                    );
+                  } else {
+                    _profiles.remove(selected!.id);
+                    await _apply(standardEqualizerProfiles.first);
+                  }
+                  await _save();
+                  if (mounted) setState(() {});
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'rename', child: Text('Переименовать')),
+                  PopupMenuItem(
+                    value: 'reset',
+                    child: Text('Сбросить настройки'),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Удалить профиль'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            editable
+                ? 'Изменения сохраняются в своём профиле'
+                : 'Для изменения настроек создайте копию профиля',
+            style: const TextStyle(fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  int get _customCount => _profiles.custom.length;
 
   // Height reserved above each slider for the gain value, and below for the
   // frequency label. Kept in sync across the ruler, grid and bands so they
@@ -191,6 +452,7 @@ class _EqualizerView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(context, accent, enabled),
+            _buildProfiles(),
             Expanded(
               child: AnimatedOpacity(
                 opacity: enabled ? 1 : 0.45,
@@ -223,7 +485,11 @@ class _EqualizerView extends StatelessWidget {
                                   context,
                                   band,
                                   accent,
-                                  enabled,
+                                  enabled &&
+                                      _loaded &&
+                                      !_busy &&
+                                      _selected != null &&
+                                      !_selected!.builtIn,
                                 );
                                 return needsScroll
                                     ? SizedBox(
@@ -455,11 +721,8 @@ class _EqualizerView extends StatelessWidget {
               thumbWidth: 8,
               thumbHeight: 14,
             ),
-            onChanged: enabled
-                ? (val) => unawaited(
-                    PlaybackController.setEqualizerBand(band.index, val),
-                  )
-                : null,
+            onChanged: enabled ? (val) => _changeBand(band.index, val) : null,
+            onChangeEnd: enabled ? (_) => unawaited(_save()) : null,
           ),
         ),
         SizedBox(

@@ -13,7 +13,9 @@
 ; flyout (SMTC) through this property on the Start Menu shortcut, so it is
 ; stamped onto shortcuts by set_shortcut_aumid.ps1 after install.
 #define AppAUMID "com.darkplayoff.yayma"
+#ifndef ReleaseDir
 #define ReleaseDir "..\..\src\build\windows\x64\runner\Release"
+#endif
 
 ; Auto-detected from the built exe's version resource; pass /DAppVersion=x.y.z.b
 ; on the ISCC command line to override (e.g. for a manual/dev build).
@@ -25,9 +27,9 @@
 ; component (e.g. 2.3.0.1). Strip it so the installer reports/names just x.y.z.
 #define AppVerDot1 = Pos(".", AppVersion)
 #define AppVerDot2 = Pos(".", Copy(AppVersion, AppVerDot1 + 1, 16)) + AppVerDot1
-#define AppVerDot3 = Pos(".", Copy(AppVersion, AppVerDot2 + 1, 16)) + AppVerDot2
-#if AppVerDot3 > 0
-#define AppVersion = Copy(AppVersion, 1, AppVerDot3 - 1)
+#define AppVerDot3Relative = Pos(".", Copy(AppVersion, AppVerDot2 + 1, 16))
+#if AppVerDot3Relative > 0
+#define AppVersion = Copy(AppVersion, 1, AppVerDot2 + AppVerDot3Relative - 1)
 #endif
 
 [Setup]
@@ -69,7 +71,11 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "{#ReleaseDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#ReleaseDir}\*"; DestDir: "{app}"; Excludes: "*.pdb,yayma.exe"; Flags: ignoreversion recursesubdirs createallsubdirs
+#ifdef RuntimeDir
+Source: "{#RuntimeDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+#endif
+Source: "..\..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 ; Extracted to the installer's temp dir and cleaned up automatically afterwards.
 Source: "set_shortcut_aumid.ps1"; DestDir: "{tmp}"
 
@@ -86,6 +92,3 @@ Filename: "powershell.exe"; \
   Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{tmp}\set_shortcut_aumid.ps1"" -ShortcutPath ""{group}\{#AppName}.lnk;{autodesktop}\{#AppName}.lnk"" -Aumid ""{#AppAUMID}"""; \
   Flags: runhidden
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
-
-[UninstallDelete]
-Type: filesandordirs; Name: "{app}"
