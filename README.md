@@ -28,6 +28,15 @@
 - **Тексты песен**: Яндекс Музыка, LRCLIB, Lyrics.ovh и Genius; выбор включённых источников прямо в панели текста. Тексты с таймкодами следуют воспроизведению и перемотке, обычные прокручиваются вручную. BetterLyrics и YouLyPlus доступны как дополнительные источники в настройках.
 - **Интеграция с системой**: управление из панели задач Windows, глобальные горячие клавиши
 
+## Установка
+
+[![Windows x64 — скачать установщик](https://img.shields.io/badge/Windows_x64-Скачать_установщик-1DB954?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/wlaster/SOYAM/releases/latest/download/soyam-windows-setup.exe)
+![Android — скоро](https://img.shields.io/badge/Android-Скоро-777777?style=for-the-badge&logo=android&logoColor=white)
+![Linux — скоро](https://img.shields.io/badge/Linux-Скоро-777777?style=for-the-badge&logo=linux&logoColor=white)
+
+Скачайте установщик последней версии для Windows и запустите его.
+Портативная версия доступна на [странице релизов](https://github.com/wlaster/SOYAM/releases/latest).
+
 ## Благодарности ❤️
 
 - [DarkPlayOff](https://github.com/DarkPlayOff/YAYMA) — исходный проект YAYMA

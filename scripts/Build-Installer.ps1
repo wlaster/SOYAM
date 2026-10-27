@@ -46,3 +46,9 @@ $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInv
 "$hash  $([IO.Path]::GetFileName($installer))" | Set-Content -LiteralPath "$installer.sha256" -Encoding ascii
 Write-Output "Installer: $installer"
 Write-Output "SHA256: $hash"
+
+# Stable filename for the README's latest-release download button.
+$alias = Join-Path $repoRoot 'dist/soyam-windows-setup.exe'
+Copy-Item -LiteralPath $installer -Destination $alias -Force
+"$hash  soyam-windows-setup.exe" | Set-Content -LiteralPath "$alias.sha256" -Encoding ascii
+Write-Output "Latest installer alias: $alias"

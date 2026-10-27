@@ -112,10 +112,24 @@ class _HomeCoverWidgetState extends State<HomeCoverWidget> {
                                 ),
                               ),
                               alignment: Alignment.center,
-                              child: Icon(
-                                Icons.waves_rounded,
-                                size: 40,
-                                color: Theme.of(context).colorScheme.onSurface,
+                              child: const Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.waves_rounded,
+                                    size: 40,
+                                    color: Colors.white,
+                                  ),
+                                  SizedBox(height: 10),
+                                  Text(
+                                    'Волна по треку',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),

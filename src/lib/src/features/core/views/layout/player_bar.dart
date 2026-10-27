@@ -33,7 +33,7 @@ class PlayerBar extends StatelessWidget {
 
         final useLyricsStyle = isHome && showLyrics;
         final blurEnabled = blurEffectsEnabledSignal.value;
-        final alpha = blurEnabled ? (useLyricsStyle ? 0.80 : 0.86) : 0.94;
+        final alpha = blurEnabled ? (useLyricsStyle ? 0.72 : 0.78) : 0.88;
         const blur = 12.0;
 
         // Dynamic background color based on theme

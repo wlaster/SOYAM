@@ -290,6 +290,7 @@ class _FloatingNavBarState extends State<FloatingNavBar>
                       selectedKey: selectedKey,
                       selectedChild: _NavIcon(
                         icon: selectedIcon,
+                        isCircle: selectedKey == _accountKey,
                         isSelected: true,
                         onTap: () {},
                       ),
@@ -339,7 +340,7 @@ class _AccountButton extends SignalWidget {
         );
         onClosed();
       },
-      borderRadius: BorderRadius.circular(AppRadius.lg),
+      customBorder: const CircleBorder(),
       child: Container(
         padding: const EdgeInsets.all(2),
         decoration: BoxDecoration(
@@ -658,6 +659,7 @@ class _NavIcon extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
   final bool isNarrow;
+  final bool isCircle;
 
   const _NavIcon({
     required this.icon,
@@ -665,6 +667,7 @@ class _NavIcon extends StatelessWidget {
     required this.onTap,
     super.key,
     this.isNarrow = false,
+    this.isCircle = false,
   });
 
   @override
@@ -680,6 +683,7 @@ class _NavIcon extends StatelessWidget {
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
         child: AnimatedContainer(
+          key: ValueKey(isCircle),
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
           width: 48,
@@ -688,7 +692,10 @@ class _NavIcon extends StatelessWidget {
             color: isSelected
                 ? scheme.primary.withValues(alpha: 0.18)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(isSelected ? 16 : 14),
+            shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
+            borderRadius: isCircle
+                ? null
+                : BorderRadius.circular(isSelected ? 16 : 14),
             border: isSelected
                 ? Border.all(color: scheme.primary.withValues(alpha: 0.35))
                 : null,

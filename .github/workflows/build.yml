@@ -110,15 +110,16 @@ jobs:
 
       - name: Build Installer
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "packaging\windows\yayma.iss"
+          ./scripts/Build-Installer.ps1 -Compiler "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
         shell: powershell
 
       - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
           name: windows_x64_installer
-          path: dist\soyam-windows-setup-*.exe
+          path: |
+            dist/soyam-windows-setup*.exe
+            dist/soyam-windows-setup*.exe.sha256
 
   build-android:
     runs-on: ubuntu-latest

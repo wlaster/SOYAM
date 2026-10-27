@@ -43,6 +43,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<AnimatedOpacity>(overlay).opacity, 1);
     expect(find.byIcon(Icons.waves_rounded), findsOneWidget);
+    expect(find.text('Волна по треку'), findsOneWidget);
     await mouse.moveTo(Offset.zero);
     await tester.pumpAndSettle();
     expect(tester.widget<AnimatedOpacity>(overlay).opacity, 0);

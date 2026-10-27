@@ -406,8 +406,7 @@ class _SettingsViewState extends State<SettingsView> {
                   const SizedBox(height: 20),
                   _SettingItem(
                     title: 'Источники текста песен',
-                    subtitle:
-                        'Включённые источники для поиска синхронного текста, если у ',
+                    subtitle: 'Включенные источники для поиска текста.',
                     icon: Icons.lyrics_rounded,
                     onTap: () => LyricsProvidersDialog.show(context),
                   ),

@@ -1,6 +1,6 @@
 name: yayma
 description: "SOYAM - Клиент Яндекс Музыки"
-version: 1.2.0+3
+version: 1.2.1+4
 publish_to: 'none'
 
 environment:
@@ -49,13 +49,13 @@ flutter_launcher_icons:
   android: false
   windows:
     generate: true
-    image_path: "assets/icons/logo.webp"
+    image_path: "assets/icons/logo.png"
   linux:
     generate: true
-    image_path: "assets/icons/logo.webp"
+    image_path: "assets/icons/logo.png"
   macos:
     generate: true
-    image_path: "assets/icons/logo.webp"
+    image_path: "assets/icons/logo.png"
 
 flutter:
   uses-material-design: true
