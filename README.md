@@ -7,7 +7,13 @@
 
 Альтернативный клиент Яндекс Музыки на Flutter и Rust. Основная проверенная сборка — Windows x64.
 
-
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/ui_home.webp" width="280" alt="Главный экран"/></td>
+    <td align="center"><img src="docs/screenshots/ui_search.webp" width="280" alt="Поиск"/></td>
+    <td align="center"><img src="docs/screenshots/ui_artist.webp" width="280" alt="Страница исполнителя"/></td>
+  </tr>
+</table>
 
 ## Предупреждение
 
