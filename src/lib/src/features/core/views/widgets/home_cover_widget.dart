@@ -1,8 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:signals_flutter/signals_flutter.dart';
-import 'package:yayma/src/features/core/providers/navigation_provider.dart';
 import 'package:yayma/src/features/core/theme/app_tokens.dart';
 import 'package:yayma/src/features/core/views/widgets/app_cover.dart';
 import 'package:yayma/src/features/core/views/widgets/hover_scale.dart';
@@ -17,6 +17,14 @@ class HomeCoverWidget extends StatefulWidget {
 }
 
 class _HomeCoverWidgetState extends State<HomeCoverWidget> {
+  final ValueNotifier<bool> _hovered = ValueNotifier(false);
+
+  @override
+  void dispose() {
+    _hovered.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return SignalBuilder(
@@ -42,13 +50,17 @@ class _HomeCoverWidgetState extends State<HomeCoverWidget> {
         final coverCurve = isMobile ? AppCoverMotion.curve : Curves.easeOutBack;
 
         return HoverScale(
-          hoverScale: 1.035,
-          duration: const Duration(milliseconds: 400),
-          cursor: meta.albumId != null
+          hoverScale: 1,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          onHoverChanged: (hovered) => _hovered.value = hovered,
+          cursor: meta.id != null
               ? SystemMouseCursors.click
               : SystemMouseCursors.basic,
-          onTap: meta.albumId != null
-              ? () => navigateTo(AppSection.album, meta.albumId)
+          onTap: meta.id != null
+              ? () => unawaited(
+                  PlaybackController.startTrackWave(meta.id!, meta.title),
+                )
               : null,
           child: AnimatedScale(
             scale: isPlaying ? 1.0 : AppCoverMotion.largePausedScale,
@@ -76,11 +88,40 @@ class _HomeCoverWidgetState extends State<HomeCoverWidget> {
                     ),
                   );
                 },
-                child: AppCover(
+                child: Stack(
                   key: ValueKey(meta.coverUrl),
-                  coverUrl: meta.coverUrl,
-                  size: size,
-                  radius: AppRadius.md,
+                  children: [
+                    AppCover(
+                      coverUrl: meta.coverUrl,
+                      size: size,
+                      radius: AppRadius.md,
+                    ),
+                    if (meta.id != null)
+                      Positioned.fill(
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: _hovered,
+                          builder: (context, hovered, _) => AnimatedOpacity(
+                            key: const ValueKey('home-cover-wave-hover'),
+                            opacity: hovered ? 1 : 0,
+                            duration: const Duration(milliseconds: 150),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.45),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                              ),
+                              alignment: Alignment.center,
+                              child: Icon(
+                                Icons.waves_rounded,
+                                size: 40,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),

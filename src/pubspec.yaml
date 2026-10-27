@@ -1,6 +1,6 @@
 name: yayma
 description: "SOYAM - Клиент Яндекс Музыки"
-version: 1.1.0+2
+version: 1.2.0+3
 publish_to: 'none'
 
 environment:
@@ -10,6 +10,7 @@ dependencies:
   audio_service: ^0.18.19
   audio_session: ^0.2.4
   collection: ^1.19.1
+  crypto: ^3.0.7
   file_picker: ^12.2.0
   flutter:
     sdk: flutter

@@ -591,7 +591,11 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                         margin: EdgeInsets.symmetric(
                           horizontal: isNarrow ? 20 : 40,
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        padding: EdgeInsets.only(
+                          top: 3,
+                          bottom: 3,
+                          right: downloadActionsWidth + 12,
+                        ),
                         itemBuilder: (context, index) {
                           final track = tracks[index];
                           return CommonTrackTile(

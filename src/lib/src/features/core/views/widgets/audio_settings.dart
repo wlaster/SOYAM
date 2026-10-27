@@ -415,13 +415,13 @@ class _EqualizerViewState extends State<_EqualizerView> {
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            editable
-                ? 'Изменения сохраняются в своём профиле'
-                : 'Для изменения настроек создайте копию профиля',
-            style: const TextStyle(fontSize: 11),
-          ),
+          if (!editable) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Для изменения настроек создайте копию профиля',
+              style: TextStyle(fontSize: 11),
+            ),
+          ],
         ],
       ),
     );

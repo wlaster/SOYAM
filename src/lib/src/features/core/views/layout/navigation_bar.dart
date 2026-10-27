@@ -11,6 +11,7 @@ import 'package:yayma/src/features/core/providers/navigation_provider.dart';
 import 'package:yayma/src/features/core/providers/visual_effects_provider.dart';
 import 'package:yayma/src/features/core/theme/app_tokens.dart';
 import 'package:yayma/src/features/core/views/widgets/rust_cached_image.dart';
+import 'package:yayma/src/features/core/views/widgets/sidebar_collapse.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 import 'package:yayma/src/features/playback/providers/wave_provider.dart';
 import 'package:yayma/src/features/playback/views/wave_view.dart';
@@ -25,10 +26,15 @@ class FloatingNavBar extends StatefulWidget {
 class _FloatingNavBarState extends State<FloatingNavBar>
     with SingleTickerProviderStateMixin {
   final LayerLink _layerLink = LayerLink();
+  final GlobalKey _homeKey = GlobalKey();
+  final GlobalKey _searchKey = GlobalKey();
+  final GlobalKey _libraryKey = GlobalKey();
+  final GlobalKey _accountKey = GlobalKey();
   OverlayEntry? _overlayEntry;
   Timer? _showWaveTimer;
   bool _isHovered = false;
   bool _isNavbarHovered = false;
+  bool _isEdgeHovered = false;
   bool _isAccountMenuOpen = false;
 
   void _showWaveSettings() {
@@ -77,6 +83,7 @@ class _FloatingNavBarState extends State<FloatingNavBar>
         final colorScheme = Theme.of(context).colorScheme;
         final currentState = currentNavStateSignal.value;
         final currentSection = currentState.section;
+        final selectedRoot = currentRootSignal.value;
         final isHome = currentSection == AppSection.home;
         final isAutoHideEnabled =
             !Platform.isAndroid && autoHideNavbarSignal.value;
@@ -85,9 +92,9 @@ class _FloatingNavBarState extends State<FloatingNavBar>
         final barColor = playerBarColorSignal.value;
 
         final isVisible =
-            !isHome ||
             !isAutoHideEnabled ||
             _isNavbarHovered ||
+            _isEdgeHovered ||
             _isHovered ||
             _isAccountMenuOpen;
         final isNarrow = MediaQuery.sizeOf(context).width < 600;
@@ -153,107 +160,144 @@ class _FloatingNavBarState extends State<FloatingNavBar>
             ),
           if (isDesktop) const SizedBox(height: 12),
           _NavIcon(
+            key: _homeKey,
             icon: Icons.home_rounded,
-            isSelected: currentSection == AppSection.home,
+            isSelected: selectedRoot == AppSection.home,
             onTap: () => setSection(AppSection.home),
             isNarrow: isNarrow,
           ),
           _NavIcon(
+            key: _searchKey,
             icon: Icons.search_rounded,
-            isSelected: currentSection == AppSection.search,
+            isSelected: selectedRoot == AppSection.search,
             onTap: () => setSection(AppSection.search),
             isNarrow: isNarrow,
           ),
           _NavIcon(
+            key: _libraryKey,
             icon: Icons.library_music_rounded,
             isSelected:
-                currentSection == AppSection.liked ||
-                currentSection == AppSection.playlists,
+                selectedRoot == AppSection.liked ||
+                selectedRoot == AppSection.playlists,
             onTap: () => setSection(AppSection.liked),
             isNarrow: isNarrow,
           ),
           if (isDesktop) const SizedBox(height: 12),
           _AccountButton(
+            key: _accountKey,
             onOpened: () => setState(() => _isAccountMenuOpen = true),
             onClosed: () => setState(() => _isAccountMenuOpen = false),
           ),
         ];
 
-        return MouseRegion(
-          opaque: false,
+        final selectedKey = switch (selectedRoot) {
+          AppSection.home => _homeKey,
+          AppSection.search => _searchKey,
+          AppSection.liked || AppSection.playlists => _libraryKey,
+          _ => _accountKey,
+        };
+        final selectedIcon = switch (selectedRoot) {
+          AppSection.home => Icons.home_rounded,
+          AppSection.search => Icons.search_rounded,
+          AppSection.liked ||
+          AppSection.playlists => Icons.library_music_rounded,
+          _ => Icons.person_rounded,
+        };
+        final panel = MouseRegion(
           onEnter: (_) => setState(() => _isNavbarHovered = true),
           onExit: (_) => setState(() => _isNavbarHovered = false),
-          child: Padding(
-            padding: isNarrow
-                ? EdgeInsets.only(
-                    bottom: 12 + systemBottom,
-                    left: 24,
-                    right: 24,
-                  )
-                : const EdgeInsets.only(
-                    left: 16,
-                    right: 48,
-                    top: 48,
-                    bottom: 48,
+          child: CompositedTransformTarget(
+            link: _layerLink,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadius.xxxl),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.xxxl),
+                child: BackdropFilter(
+                  enabled: blurEffectsEnabledSignal.value && !isHome,
+                  filter: ui.ImageFilter.blur(
+                    sigmaX: isHome ? 0 : 2,
+                    sigmaY: isHome ? 0 : 2,
                   ),
-            child: AnimatedSlide(
-              offset: isVisible
-                  ? Offset.zero
-                  : (isNarrow ? const Offset(0, 1.5) : const Offset(-1.5, 0)),
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              child: AnimatedOpacity(
-                opacity: isVisible ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 200),
-                child: CompositedTransformTarget(
-                  link: _layerLink,
                   child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(AppRadius.xxxl),
+                    width: isNarrow ? null : 64,
+                    height: isNarrow ? 64 : null,
+                    padding: EdgeInsets.symmetric(
+                      vertical: isNarrow ? 0 : 12,
+                      horizontal: isNarrow ? 12 : 0,
                     ),
-                    child: ClipRRect(
+                    decoration: BoxDecoration(
+                      color: barColor.withValues(alpha: alpha),
                       borderRadius: BorderRadius.circular(AppRadius.xxxl),
-                      child: BackdropFilter(
-                        enabled: blurEffectsEnabledSignal.value && !isHome,
-                        filter: ui.ImageFilter.blur(
-                          sigmaX: isHome ? 0 : 2,
-                          sigmaY: isHome ? 0 : 2,
-                        ),
-                        child: Container(
-                          width: isNarrow ? null : 64,
-                          height: isNarrow ? 64 : null,
-                          padding: EdgeInsets.symmetric(
-                            vertical: isNarrow ? 0 : 12,
-                            horizontal: isNarrow ? 12 : 0,
-                          ),
-                          decoration: BoxDecoration(
-                            color: barColor.withValues(alpha: alpha),
-                            borderRadius: BorderRadius.circular(AppRadius.xxxl),
-                            border: Border.all(
-                              color: colorScheme.onSurface.withValues(
-                                alpha: 0.1,
-                              ),
-                            ),
-                          ),
-                          child: isNarrow
-                              ? Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: children,
-                                )
-                              : Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: children,
-                                ),
-                        ),
+                      border: Border.all(
+                        color: colorScheme.onSurface.withValues(alpha: 0.1),
                       ),
                     ),
+                    child: isNarrow
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: children,
+                          )
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: children,
+                          ),
                   ),
                 ),
               ),
             ),
           ),
+        );
+        return Stack(
+          children: [
+            if (isAutoHideEnabled)
+              Positioned(
+                left: 0,
+                top: isNarrow ? 0 : 40,
+                bottom: isNarrow ? 0 : 40,
+                width: isNarrow ? 20 : 88,
+                child: MouseRegion(
+                  key: const ValueKey('sidebar-edge-trigger'),
+                  onEnter: (_) => setState(() => _isEdgeHovered = true),
+                  onExit: (_) => setState(() => _isEdgeHovered = false),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            Padding(
+              padding: isNarrow
+                  ? EdgeInsets.only(
+                      bottom: 12 + systemBottom,
+                      left: 24,
+                      right: 24,
+                    )
+                  : const EdgeInsets.only(
+                      left: 16,
+                      right: 48,
+                      top: 48,
+                      bottom: 48,
+                    ),
+
+              child: isNarrow
+                  ? AnimatedSlide(
+                      offset: isVisible ? Offset.zero : const Offset(0, 1.5),
+                      duration: const Duration(milliseconds: 300),
+                      child: panel,
+                    )
+                  : SidebarCollapse(
+                      visible: isVisible,
+                      selectedKey: selectedKey,
+                      selectedChild: _NavIcon(
+                        icon: selectedIcon,
+                        isSelected: true,
+                        onTap: () {},
+                      ),
+                      color: barColor.withValues(alpha: alpha),
+                      child: panel,
+                    ),
+            ),
+          ],
         );
       },
     );
@@ -273,7 +317,11 @@ class _AccountButton extends SignalWidget {
   final VoidCallback onOpened;
   final VoidCallback onClosed;
 
-  const _AccountButton({required this.onOpened, required this.onClosed});
+  const _AccountButton({
+    required this.onOpened,
+    required this.onClosed,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -615,6 +663,7 @@ class _NavIcon extends StatelessWidget {
     required this.icon,
     required this.isSelected,
     required this.onTap,
+    super.key,
     this.isNarrow = false,
   });
 
@@ -629,7 +678,7 @@ class _NavIcon extends StatelessWidget {
       child: AnimatedScale(
         scale: isSelected ? 1.12 : 1.0,
         duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutBack,
+        curve: Curves.easeOutCubic,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,

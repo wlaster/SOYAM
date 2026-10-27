@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -145,20 +146,16 @@ class _TrackInfoState extends State<_TrackInfo> {
         if (meta.id == null) return const SizedBox();
         final cs = Theme.of(context).colorScheme;
 
-        final hasAlbum = meta.albumId != null;
-
         return Row(
           children: [
             HoverScale(
-              cursor: hasAlbum
-                  ? SystemMouseCursors.click
-                  : SystemMouseCursors.basic,
+              cursor: SystemMouseCursors.click,
               hoverScale: 1,
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOut,
-              onTap: hasAlbum
-                  ? () => navigateTo(AppSection.album, meta.albumId)
-                  : null,
+              onTap: () => unawaited(
+                PlaybackController.startTrackWave(meta.id!, meta.title),
+              ),
               onHoverChanged: (h) => _isCoverHovered.value = h,
               child: AnimatedScale(
                 scale: isPlaying ? 1.0 : AppCoverMotion.smallPausedScale,
@@ -174,32 +171,31 @@ class _TrackInfoState extends State<_TrackInfo> {
                         size: widget.coverSize,
                         radius: AppRadius.sm,
                       ),
-                      if (hasAlbum)
-                        Positioned.fill(
-                          child: ValueListenableBuilder<bool>(
-                            valueListenable: _isCoverHovered,
-                            builder: (context, hovered, _) {
-                              return AnimatedOpacity(
-                                duration: const Duration(milliseconds: 150),
-                                opacity: hovered ? 1 : 0,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.45),
-                                    borderRadius: BorderRadius.circular(
-                                      AppRadius.sm,
-                                    ),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Icon(
-                                    Icons.album_rounded,
-                                    color: cs.onSurface,
-                                    size: 24,
+                      Positioned.fill(
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: _isCoverHovered,
+                          builder: (context, hovered, _) {
+                            return AnimatedOpacity(
+                              duration: const Duration(milliseconds: 150),
+                              opacity: hovered ? 1 : 0,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.45),
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.sm,
                                   ),
                                 ),
-                              );
-                            },
-                          ),
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  Icons.waves_rounded,
+                                  color: cs.onSurface,
+                                  size: 24,
+                                ),
+                              ),
+                            );
+                          },
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -247,7 +243,11 @@ class _TrackInfoState extends State<_TrackInfo> {
                       TrackVersionWidget(version: meta.version, fontSize: 12),
                     ],
                   ),
-                  ArtistNamesWidget(artists: meta.artists, maxLines: 1),
+                  ArtistNamesWidget(
+                    artists: meta.artists,
+                    fontSize: 16,
+                    maxLines: 1,
+                  ),
                 ],
               ),
             ),
@@ -440,8 +440,18 @@ class _VolumeAndQuality extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           if (showVolume) ...[
-            VolumeStateIcon(color: onSurfaceVariant),
-            CommonVolumeSlider(width: volumeWidth, activeColor: accentColor),
+            VolumeScrollRegion(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  VolumeStateIcon(color: onSurfaceVariant),
+                  CommonVolumeSlider(
+                    width: volumeWidth,
+                    activeColor: accentColor,
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(width: 8),
             const AudioDeviceButton(),
           ],

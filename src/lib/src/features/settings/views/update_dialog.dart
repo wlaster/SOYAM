@@ -9,6 +9,7 @@ import 'package:yayma/src/features/core/theme/app_tokens.dart';
 import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/smooth_scroll.dart';
 import 'package:yayma/src/features/settings/services/update_service.dart';
+import 'package:yayma/src/features/settings/services/windows_update_service.dart';
 
 class UpdateDialog extends StatefulWidget {
   final AppUpdateInfo? initialInfo;
@@ -27,10 +28,8 @@ class UpdateDialog extends StatefulWidget {
               top: Radius.circular(AppRadius.xxl),
             ),
           ),
-          builder: (context) => UpdateDialog(
-            initialInfo: initialInfo,
-            bottomSheet: true,
-          ),
+          builder: (context) =>
+              UpdateDialog(initialInfo: initialInfo, bottomSheet: true),
         ),
       );
       return;
@@ -48,6 +47,7 @@ class UpdateDialog extends StatefulWidget {
 }
 
 class _UpdateDialogState extends State<UpdateDialog> {
+  late final bool _windowsInstalled = WindowsUpdateService.isInstalled;
   bool _isLoading = false;
   String? _error;
   AppUpdateInfo? _info;
@@ -66,6 +66,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
     super.initState();
     if (widget.initialInfo != null) {
       _info = widget.initialInfo;
+      unawaited(_autoDownloadWindows());
     } else {
       unawaited(_checkUpdates());
     }
@@ -75,6 +76,14 @@ class _UpdateDialogState extends State<UpdateDialog> {
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  bool get _canInstallInApp => Platform.isAndroid || _windowsInstalled;
+
+  Future<void> _autoDownloadWindows() async {
+    if (_windowsInstalled && _info?.hasUpdate == true) {
+      await _downloadUpdate();
+    }
   }
 
   Future<void> _checkUpdates() async {
@@ -94,22 +103,21 @@ class _UpdateDialogState extends State<UpdateDialog> {
           _info = info;
         }
       });
+      if (info?.hasUpdate == true) unawaited(_autoDownloadWindows());
     }
   }
 
   void _launchUrl(String url) {
-    unawaited(
-      () async {
-        try {
-          final uri = Uri.parse(url);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-        } on Object catch (e) {
-          debugPrint('Error launching browser: $e');
+    unawaited(() async {
+      try {
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
         }
-      }(),
-    );
+      } on Object catch (e) {
+        debugPrint('Error launching browser: $e');
+      }
+    }());
   }
 
   Future<void> _downloadUpdate() async {
@@ -125,16 +133,27 @@ class _UpdateDialogState extends State<UpdateDialog> {
     });
 
     try {
-      final asset = await UpdateService.resolveApkAsset(info);
-      final file = await UpdateService.downloadApk(
-        asset,
-        onProgress: (progress) {
-          final step = progress == null ? -1 : (progress * 100).round();
-          if (step == _lastProgressStep) return;
-          _lastProgressStep = step;
-          if (mounted) setState(() => _downloadProgress = progress);
-        },
-      );
+      void progressChanged(double? progress) {
+        final step = progress == null ? -1 : (progress * 100).round();
+        if (step == _lastProgressStep) return;
+        _lastProgressStep = step;
+        if (mounted) setState(() => _downloadProgress = progress);
+      }
+
+      final File file;
+      if (Platform.isWindows) {
+        final asset = await WindowsUpdateService.resolveAsset(info);
+        file = await WindowsUpdateService.download(
+          asset,
+          onProgress: progressChanged,
+        );
+      } else {
+        final asset = await UpdateService.resolveApkAsset(info);
+        file = await UpdateService.downloadApk(
+          asset,
+          onProgress: progressChanged,
+        );
+      }
       if (!mounted) return;
       setState(() {
         _isDownloading = false;
@@ -160,6 +179,10 @@ class _UpdateDialogState extends State<UpdateDialog> {
 
     setState(() => _isInstalling = true);
     try {
+      if (Platform.isWindows) {
+        await WindowsUpdateService.install(path);
+        return;
+      }
       final allowed = await UpdateService.canInstallPackages();
       if (!allowed) {
         await UpdateService.requestInstallPermission();
@@ -274,7 +297,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
     );
   }
 
-  Widget _buildAndroidStatus(ColorScheme cs) {
+  Widget _buildDownloadStatus(ColorScheme cs) {
     if (_isDownloading) {
       final progress = _downloadProgress;
       return Column(
@@ -334,9 +357,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
     if (_isLoading) {
       content = const SizedBox(
         height: 150,
-        child: Center(
-          child: M3ELoadingIndicator(),
-        ),
+        child: Center(child: M3ELoadingIndicator()),
       );
     } else if (_error != null) {
       content = Padding(
@@ -344,11 +365,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.error_outline_rounded,
-              color: cs.error,
-              size: 48,
-            ),
+            Icon(Icons.error_outline_rounded, color: cs.error, size: 48),
             const SizedBox(height: 16),
             Text(
               _error!,
@@ -407,24 +424,30 @@ class _UpdateDialogState extends State<UpdateDialog> {
                   ),
                 ),
               ),
-              if (Platform.isAndroid) ...[
+              if (_canInstallInApp) ...[
                 const SizedBox(height: 12),
-                _buildAndroidStatus(cs),
+                _buildDownloadStatus(cs),
               ],
             ],
           ),
         );
-        if (Platform.isAndroid) {
+        if (_canInstallInApp) {
           leadingAction = _browserIconButton(cs, info.url);
           if (_downloadedPath != null) {
             actions = [
               ElevatedButton.icon(
-                onPressed: _isInstalling ? null : () => unawaited(_installUpdate()),
+                onPressed: _isInstalling
+                    ? null
+                    : () => unawaited(_installUpdate()),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   foregroundColor: Colors.black,
                 ),
-                icon: const Icon(Icons.install_mobile_rounded),
+                icon: Icon(
+                  Platform.isWindows
+                      ? Icons.install_desktop_rounded
+                      : Icons.install_mobile_rounded,
+                ),
                 label: const Text(
                   'Установить',
                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -538,9 +561,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
               ),
               const SizedBox(height: 16),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                 child: Row(
                   children: [
                     Icon(Icons.system_update_rounded, color: cs.onSurface),
@@ -576,11 +597,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
                     AppSpacing.lg,
                   ),
                   child: Row(
-                    children: [
-                      ?leadingAction,
-                      const Spacer(),
-                      ...actions,
-                    ],
+                    children: [?leadingAction, const Spacer(), ...actions],
                   ),
                 ),
             ],

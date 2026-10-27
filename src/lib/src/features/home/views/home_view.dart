@@ -585,11 +585,18 @@ class _HomeMainControls extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  VolumeStateIcon(color: onSurfaceVariant),
-                  const SizedBox(width: 12),
-                  CommonVolumeSlider(
-                    width: small ? 180 : 240,
-                    activeColor: accentColor,
+                  VolumeScrollRegion(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        VolumeStateIcon(color: onSurfaceVariant),
+                        const SizedBox(width: 12),
+                        CommonVolumeSlider(
+                          width: small ? 180 : 240,
+                          activeColor: accentColor,
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(width: 8),
                   const AudioDeviceButton(),

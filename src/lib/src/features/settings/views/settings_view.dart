@@ -18,6 +18,7 @@ import 'package:yayma/src/features/core/views/widgets/smooth_scroll.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
 import 'package:yayma/src/features/settings/views/ai_content_reduction_setting.dart';
 import 'package:yayma/src/features/settings/views/lyrics_providers_dialog.dart';
+import 'package:yayma/src/features/settings/views/update_dialog.dart';
 import 'package:yayma/src/rust/api/content.dart' as rust;
 import 'package:yayma/src/rust/api/recommendations.dart' as recommendations;
 import 'package:yayma/src/rust/api/simple.dart' as simple;
@@ -340,7 +341,7 @@ class _SettingsViewState extends State<SettingsView> {
                         return _SettingItem(
                           title: 'Скрывать боковую панель',
                           subtitle:
-                              'Автоматически скрывать навигацию на главном экране',
+                              'Автоматически скрывать навигацию на всех страницах',
                           icon: Icons.vertical_split_rounded,
                           onTap: () => unawaited(
                             _toggleAutoHideNavbar(!(enabled.value ?? false)),
@@ -1111,6 +1112,14 @@ class _AboutAppCard extends StatelessWidget {
                               border: cs.primary.withValues(alpha: 0.30),
                             );
                           },
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => UpdateDialog.show(context),
+                          icon: const Icon(
+                            Icons.system_update_rounded,
+                            size: 18,
+                          ),
+                          label: const Text('Проверить обновления'),
                         ),
                         _chip(
                           context,

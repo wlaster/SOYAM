@@ -315,19 +315,12 @@ class _PlaylistContentState extends State<_PlaylistContent> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      onPressed: () => PlaybackController.playPlaylist(
+                    CollectionPlayButton(
+                      collectionKey:
+                          'playlist:${widget.playlist.uid}:${widget.playlist.kind}',
+                      onPlay: () => PlaybackController.playPlaylist(
                         widget.playlist.uid.toString(),
                         widget.playlist.kind,
-                      ),
-                      tooltip: 'Слушать',
-                      icon: const Icon(Icons.play_arrow_rounded),
-                      style: IconButton.styleFrom(
-                        minimumSize: const Size(64, 56),
-                        iconSize: 26,
-                        backgroundColor: cs.onSurface.withValues(alpha: 0.1),
-                        foregroundColor: cs.onSurface,
-                        side: BorderSide(color: cs.outlineVariant),
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -353,18 +346,12 @@ class _PlaylistContentState extends State<_PlaylistContent> {
                 ),
               ]
             : [
-                IconButton(
-                  onPressed: () => PlaybackController.playPlaylist(
+                CollectionPlayButton(
+                  collectionKey:
+                      'playlist:${widget.playlist.uid}:${widget.playlist.kind}',
+                  onPlay: () => PlaybackController.playPlaylist(
                     widget.playlist.uid.toString(),
                     widget.playlist.kind,
-                  ),
-                  tooltip: 'Слушать',
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(56, 56),
-                    iconSize: 26,
-                    backgroundColor: cs.primary,
-                    foregroundColor: cs.onPrimary,
                   ),
                 ),
                 const SizedBox(width: 6),

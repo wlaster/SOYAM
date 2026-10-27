@@ -68,6 +68,7 @@ Future<void> disposePlayback() async {
   _bufferingDelayDebouncer.dispose();
 
   playerStateSignal.value = null;
+  activeCollectionSignal.value = null;
   playerProgressSignal.value = null;
   vibeTickSignal.value = F32Array26.init();
   audioQualitySignal.value = AudioQuality.normal;
@@ -565,32 +566,60 @@ Future<void> refreshAudioEffects() async {
   audioEffectsSignal.value = await rust.getAudioEffects(ctx: ctx);
 }
 
+final FlutterSignal<String?> activeCollectionSignal = signal<String?>(null);
+
 // Global playback control methods
 class PlaybackController {
-  static Future<void> playTrack(String trackId) =>
-      runRustAction((ctx) => rust.playTrack(ctx: ctx, trackId: trackId));
-  static Future<void> playLikedTrack(String trackId) =>
-      runRustAction((ctx) => rust.playLikedTrack(ctx: ctx, trackId: trackId));
+  static Future<void> _startCollection(
+    String? key,
+    Future<bool> Function() start,
+  ) async {
+    if (await start()) activeCollectionSignal.value = key;
+  }
+
+  static Future<void> playTrack(String trackId) => _startCollection(
+    null,
+    () => runRustAction((ctx) => rust.playTrack(ctx: ctx, trackId: trackId)),
+  );
+  static Future<void> playLikedTrack(String trackId) => _startCollection(
+    'liked',
+    () =>
+        runRustAction((ctx) => rust.playLikedTrack(ctx: ctx, trackId: trackId)),
+  );
   static Future<void> playAlbumTrack(int albumId, String trackId) =>
-      runRustAction(
-        (ctx) =>
-            rust.playAlbumTrack(ctx: ctx, albumId: albumId, trackId: trackId),
-      );
-  static Future<void> playPlaylistTrack(String uid, int kind, String trackId) =>
-      runRustAction(
-        (ctx) => rust.playPlaylistTrack(
-          ctx: ctx,
-          uid: uid,
-          kind: kind,
-          trackId: trackId,
+      _startCollection(
+        'album:$albumId',
+        () => runRustAction(
+          (ctx) =>
+              rust.playAlbumTrack(ctx: ctx, albumId: albumId, trackId: trackId),
         ),
       );
-  static Future<void> playPlaylist(String uid, int kind) =>
-      runRustAction((ctx) => rust.playPlaylist(ctx: ctx, uid: uid, kind: kind));
-  static Future<void> playArtist(String artistId) =>
-      runRustAction((ctx) => rust.playArtist(ctx: ctx, artistId: artistId));
-  static Future<void> playAlbum(int albumId) =>
-      runRustAction((ctx) => rust.playAlbum(ctx: ctx, albumId: albumId));
+  static Future<void> playPlaylistTrack(String uid, int kind, String trackId) =>
+      _startCollection(
+        'playlist:$uid:$kind',
+        () => runRustAction(
+          (ctx) => rust.playPlaylistTrack(
+            ctx: ctx,
+            uid: uid,
+            kind: kind,
+            trackId: trackId,
+          ),
+        ),
+      );
+  static Future<void> playPlaylist(String uid, int kind) => _startCollection(
+    'playlist:$uid:$kind',
+    () => runRustAction(
+      (ctx) => rust.playPlaylist(ctx: ctx, uid: uid, kind: kind),
+    ),
+  );
+  static Future<void> playArtist(String artistId) => _startCollection(
+    'artist:$artistId',
+    () => runRustAction((ctx) => rust.playArtist(ctx: ctx, artistId: artistId)),
+  );
+  static Future<void> playAlbum(int albumId) => _startCollection(
+    'album:$albumId',
+    () => runRustAction((ctx) => rust.playAlbum(ctx: ctx, albumId: albumId)),
+  );
   static Future<void> togglePlay() =>
       runRustAction((ctx) => rust.togglePlayPause(ctx: ctx));
 

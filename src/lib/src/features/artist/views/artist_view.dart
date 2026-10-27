@@ -233,17 +233,9 @@ class _ArtistViewState extends State<ArtistView> {
             coverSize: 200,
             isCircle: true,
             actions: [
-              IconButton(
-                onPressed: () =>
-                    unawaited(PlaybackController.playArtist(artist.id)),
-                tooltip: 'Слушать',
-                icon: const Icon(Icons.play_arrow_rounded),
-                style: IconButton.styleFrom(
-                  minimumSize: const Size(56, 56),
-                  iconSize: 26,
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
-                ),
+              CollectionPlayButton(
+                collectionKey: 'artist:${artist.id}',
+                onPlay: () => PlaybackController.playArtist(artist.id),
               ),
               IconButton(
                 onPressed: () => unawaited(_toggleArtistLike(artist, isLiked)),

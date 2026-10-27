@@ -185,18 +185,10 @@ class _AlbumViewState extends State<AlbumView> {
                 final isAndroid = Platform.isAndroid;
 
                 final albumActions = [
-                  IconButton(
-                    onPressed: () => unawaited(
-                      PlaybackController.playAlbum(int.parse(albumData.id)),
-                    ),
-                    tooltip: 'Слушать',
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size(56, 56),
-                      iconSize: 26,
-                      backgroundColor: cs.primary,
-                      foregroundColor: cs.onPrimary,
-                    ),
+                  CollectionPlayButton(
+                    collectionKey: 'album:${albumData.id}',
+                    onPlay: () =>
+                        PlaybackController.playAlbum(int.parse(albumData.id)),
                   ),
                   IconButton(
                     onPressed: () =>
@@ -240,17 +232,10 @@ class _AlbumViewState extends State<AlbumView> {
                   ),
                 ];
                 final androidAlbumActions = [
-                  IconButton(
-                    onPressed: () => unawaited(
-                      PlaybackController.playAlbum(int.parse(albumData.id)),
-                    ),
-                    tooltip: 'Слушать',
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size(64, 56),
-                      backgroundColor: cs.primary,
-                      foregroundColor: cs.onPrimary,
-                    ),
+                  CollectionPlayButton(
+                    collectionKey: 'album:${albumData.id}',
+                    onPlay: () =>
+                        PlaybackController.playAlbum(int.parse(albumData.id)),
                   ),
                   IconButton(
                     onPressed: () =>

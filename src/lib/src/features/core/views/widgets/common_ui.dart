@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:m3e_core/m3e_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:signals_flutter/signals_flutter.dart';
@@ -326,6 +327,114 @@ class CommonDetailHeader extends StatelessWidget {
   }
 }
 
+class CollectionPlayButton extends StatelessWidget {
+  const CollectionPlayButton({
+    required this.collectionKey,
+    required this.onPlay,
+    super.key,
+  });
+  final String collectionKey;
+  final Future<void> Function() onPlay;
+
+  @override
+  Widget build(BuildContext context) => SignalBuilder(
+    builder: (context) {
+      final cs = Theme.of(context).colorScheme;
+      final active =
+          activeCollectionSignal.value == collectionKey &&
+          currentTrackIdSignal.value != null &&
+          currentWaveSeedsSignal.value.isEmpty;
+      final playing = active && isPlayingSignal.value;
+      return IconButton(
+        tooltip: playing ? 'Пауза' : 'Слушать',
+        onPressed: () =>
+            unawaited(active ? PlaybackController.togglePlay() : onPlay()),
+        icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+        style: IconButton.styleFrom(
+          minimumSize: const Size(56, 56),
+          iconSize: 26,
+          backgroundColor: playing
+              ? cs.primary
+              : cs.onSurface.withValues(alpha: 0.1),
+          foregroundColor: playing ? cs.onPrimary : cs.onSurface,
+          side: playing ? null : BorderSide(color: cs.outlineVariant),
+        ),
+      );
+    },
+  );
+}
+
+class VolumeScrollRegion extends StatefulWidget {
+  const VolumeScrollRegion({required this.child, this.onChanged, super.key});
+  final Widget child;
+  final ValueChanged<int>? onChanged;
+
+  @override
+  State<VolumeScrollRegion> createState() => _VolumeScrollRegionState();
+}
+
+class _VolumeScrollRegionState extends State<VolumeScrollRegion> {
+  double _target = 0;
+  DateTime? _lastScroll;
+  final ValueNotifier<double?> _wheelVolume = ValueNotifier(null);
+  Timer? _wheelLabelTimer;
+
+  @override
+  void dispose() {
+    _wheelLabelTimer?.cancel();
+    _wheelVolume.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    behavior: HitTestBehavior.opaque,
+    onPointerSignal: (event) {
+      if (event is! PointerScrollEvent || event.scrollDelta.dy == 0) return;
+      GestureBinding.instance.pointerSignalResolver.register(event, (_) {
+        final now = DateTime.now();
+        if (_lastScroll == null ||
+            now.difference(_lastScroll!).inMilliseconds > 500) {
+          _target = playerVolumeSignal.value.toDouble();
+        }
+        _lastScroll = now;
+        _target = (_target - event.scrollDelta.dy / 40).clamp(0.0, 100.0);
+        _wheelVolume.value = _target.roundToDouble();
+        _wheelLabelTimer?.cancel();
+        _wheelLabelTimer = Timer(const Duration(milliseconds: 650), () {
+          _wheelVolume.value = null;
+        });
+        if (widget.onChanged != null) {
+          widget.onChanged!(_target.round());
+        } else {
+          unawaited(PlaybackController.changeVolume(_target.round()));
+        }
+      });
+    },
+    child: _VolumeScrollScope(volume: _wheelVolume, child: widget.child),
+  );
+}
+
+class _VolumeScrollScope extends InheritedNotifier<ValueNotifier<double?>> {
+  const _VolumeScrollScope({
+    required ValueNotifier<double?> volume,
+    required super.child,
+  }) : super(notifier: volume);
+
+  static double? of(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<_VolumeScrollScope>()
+      ?.notifier
+      ?.value;
+
+  static void clear(BuildContext context) {
+    context
+            .getInheritedWidgetOfExactType<_VolumeScrollScope>()
+            ?.notifier
+            ?.value =
+        null;
+  }
+}
+
 class VolumeStateIcon extends StatelessWidget {
   final Color? color;
   final double size;
@@ -390,31 +499,77 @@ class _CommonVolumeSliderState extends State<CommonVolumeSlider> {
   Widget build(BuildContext context) {
     final activeColor =
         widget.activeColor ?? Theme.of(context).colorScheme.primary;
+    final wheelVolume = _VolumeScrollScope.of(context);
     return SignalBuilder(
       builder: (context) {
         final volume = playerVolumeSignal().toDouble();
-        final displayVolume = _dragVolume ?? volume;
+        final displayVolume = _dragVolume ?? wheelVolume ?? volume;
 
         return SizedBox(
           width: widget.width,
           child: Listener(
             onPointerCancel: (_) => _finishDrag(),
-            child: M3ESlider(
-              value: displayVolume.clamp(0, 100),
-              max: 100,
-              label: _showLabel ? '${displayVolume.round()}' : null,
-              decoration: expressSliderDecoration(
-                activeColor: activeColor,
-                inactiveColor: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.15),
-              ),
-              onChangeStart: _showVolume,
-              onChanged: (val) {
-                if (_dragVolume != val) _showVolume(val);
-                unawaited(PlaybackController.changeVolume(val.round()));
-              },
-              onChangeEnd: (_) => _finishDrag(),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                M3ESlider(
+                  value: displayVolume.clamp(0, 100),
+                  max: 100,
+                  label: _showLabel ? '${displayVolume.round()}' : null,
+                  decoration: expressSliderDecoration(
+                    activeColor: activeColor,
+                    inactiveColor: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.15),
+                  ),
+                  onChangeStart: (value) {
+                    _VolumeScrollScope.clear(context);
+                    _showVolume(value);
+                  },
+                  onChanged: (val) {
+                    if (_dragVolume != val) _showVolume(val);
+                    unawaited(PlaybackController.changeVolume(val.round()));
+                  },
+                  onChangeEnd: (_) => _finishDrag(),
+                ),
+                if (wheelVolume != null && _dragVolume == null)
+                  Positioned(
+                    left:
+                        M3ESliderDefaults.thumbRadius +
+                        (widget.width - 2 * M3ESliderDefaults.thumbRadius) *
+                            displayVolume /
+                            100,
+                    bottom: M3ESliderDefaults.thumbRippleRadius + 16,
+                    child: FractionalTranslation(
+                      translation: const Offset(-0.5, 0),
+                      child: IgnorePointer(
+                        child: Container(
+                          key: const ValueKey('wheel-volume-label'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.inverseSurface,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            '${displayVolume.round()}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onInverseSurface,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         );

@@ -59,6 +59,7 @@ void main() {
       isTrue,
     );
     expect(find.text('Проверка'), findsOneWidget);
+    expect(find.text('Изменения сохраняются в своём профиле'), findsNothing);
     expect(
       File('${directory.path}/equalizer_profiles.json').existsSync(),
       isTrue,
