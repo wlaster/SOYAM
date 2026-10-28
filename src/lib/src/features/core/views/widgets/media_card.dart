@@ -1,4 +1,3 @@
-import 'package:m3e_core/m3e_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/app_cover.dart';
 import 'package:yayma/src/features/core/views/widgets/track_elements.dart';
@@ -82,18 +81,13 @@ class _CommonMediaCardState extends State<CommonMediaCard> {
                             borderRadius: BorderRadius.circular(
                               widget.isCircle ? widget.size / 2 : 16,
                             ),
-                            boxShadow: hovered
-                                ? [
-                                    BoxShadow(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary
-                                          .withValues(alpha: 0.22),
-                                      blurRadius: 28,
-                                      offset: const Offset(0, 14),
-                                    ),
-                                  ]
-                                : const [BoxShadow(color: Colors.transparent)],
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
                           ),
                           child: AnimatedScale(
                             duration: const Duration(milliseconds: 200),
@@ -104,7 +98,6 @@ class _CommonMediaCardState extends State<CommonMediaCard> {
                               size: widget.size - 16,
                               radius: 16,
                               circle: widget.isCircle,
-                              shape: widget.isCircle ? null : Shapes.slanted,
                             ),
                           ),
                         ),

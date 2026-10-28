@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -33,7 +32,7 @@ class PlayerBar extends StatelessWidget {
 
         final useLyricsStyle = isHome && showLyrics;
         final blurEnabled = blurEffectsEnabledSignal.value;
-        final alpha = blurEnabled ? (useLyricsStyle ? 0.72 : 0.78) : 0.88;
+        final alpha = blurEnabled ? (useLyricsStyle ? 0.66 : 0.72) : 0.88;
         const blur = 12.0;
 
         // Dynamic background color based on theme
@@ -153,9 +152,7 @@ class _TrackInfoState extends State<_TrackInfo> {
               hoverScale: 1,
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOut,
-              onTap: () => unawaited(
-                PlaybackController.startTrackWave(meta.id!, meta.title),
-              ),
+              onTap: () => setSection(AppSection.home),
               onHoverChanged: (h) => _isCoverHovered.value = h,
               child: AnimatedScale(
                 scale: isPlaying ? 1.0 : AppCoverMotion.smallPausedScale,
@@ -187,7 +184,7 @@ class _TrackInfoState extends State<_TrackInfo> {
                                 ),
                                 alignment: Alignment.center,
                                 child: Icon(
-                                  Icons.waves_rounded,
+                                  Icons.home_rounded,
                                   color: cs.onSurface,
                                   size: 24,
                                 ),
@@ -292,6 +289,9 @@ class _PlayerControls extends StatelessWidget {
                     children:
                         [
                               IconButton(
+                                tooltip: showLyricsSignal.value
+                                    ? 'Скрыть текст'
+                                    : 'Показать текст',
                                 icon: Icon(
                                   Icons.lyrics_rounded,
                                   size: 20,
@@ -303,6 +303,7 @@ class _PlayerControls extends StatelessWidget {
                                     !showLyricsSignal.value,
                               ),
                               IconButton(
+                                tooltip: 'Перемешивание',
                                 icon: Icon(
                                   Icons.shuffle,
                                   size: 20,
@@ -313,6 +314,9 @@ class _PlayerControls extends StatelessWidget {
                                 onPressed: PlaybackController.toggleShuffle,
                               ),
                               IconButton(
+                                tooltip: isDisliked
+                                    ? 'Снять дизлайк'
+                                    : 'Дизлайк',
                                 icon: Icon(
                                   isDisliked
                                       ? Icons.heart_broken
@@ -329,6 +333,7 @@ class _PlayerControls extends StatelessWidget {
                                     : null,
                               ),
                               const IconButton(
+                                tooltip: 'Предыдущий трек',
                                 icon: Icon(
                                   Icons.skip_previous_rounded,
                                   size: 28,
@@ -336,6 +341,7 @@ class _PlayerControls extends StatelessWidget {
                                 onPressed: PlaybackController.prev,
                               ),
                               IconButton(
+                                tooltip: isPlaying ? 'Пауза' : 'Воспроизвести',
                                 iconSize: 48,
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(
@@ -375,6 +381,7 @@ class _PlayerControls extends StatelessWidget {
                                 onPressed: PlaybackController.togglePlay,
                               ),
                               const IconButton(
+                                tooltip: 'Следующий трек',
                                 icon: Icon(Icons.skip_next_rounded, size: 28),
                                 onPressed: PlaybackController.next,
                               ),
@@ -388,6 +395,7 @@ class _PlayerControls extends StatelessWidget {
                                     : null,
                               ),
                               IconButton(
+                                tooltip: 'Режим повтора',
                                 icon: Icon(
                                   repeatIcon,
                                   size: 20,

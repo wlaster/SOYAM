@@ -235,3 +235,8 @@ pub async fn start_my_wave(ctx: &AppContext) {
     };
     let _ = ctx.audio.tx.send(AudioMessage::StartWave(seeds)).await;
 }
+
+/// Start a visible list while retaining its complete order for Previous/Next.
+pub async fn play_track_list(ctx: &AppContext, track_ids: Vec<String>, selected_id: String) -> bool {
+    ctx.audio.tx.send(AudioMessage::PlayTrackList(track_ids, selected_id)).await.is_ok()
+}

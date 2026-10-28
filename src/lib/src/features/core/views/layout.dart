@@ -444,7 +444,7 @@ class _FloatingBackButton extends StatelessWidget {
         if (!canGoBackSignal.value) return const SizedBox.shrink();
 
         return Positioned(
-          top: 60,
+          top: 76,
           left: 24,
           child: IconButton(
             onPressed: goBack,
@@ -518,7 +518,7 @@ class _FloatingRefreshButtonState extends State<_FloatingRefreshButton> {
           return const SizedBox.shrink();
         }
         // Without the back button take its place, otherwise sit below it.
-        final top = canGoBackSignal.value ? 120.0 : 60.0;
+        final top = canGoBackSignal.value ? 136.0 : 76.0;
         return Positioned(
           top: top,
           left: 24,

@@ -372,13 +372,27 @@ impl AudioSystem {
             if in_wave {
                 self.send_wave_started();
             }
-            self.controller
-                .play_track(track.clone(), false, Duration::ZERO, false)
+            self.play_filtered_track(track.clone(), false, Duration::ZERO, false)
                 .await;
             if in_wave {
                 self.send_wave_track_started(&track);
             }
         }
+    }
+
+    async fn play_filtered_track(&mut self, mut track: Track, start_paused: bool, mut position: Duration, soft_reload: bool) {
+        let limit = self.signals.queue.get().len().max(1);
+        for _ in 0..=limit {
+            if crate::app::settings::ALLOW_ADULT_CONTENT.load(Ordering::Relaxed) || !crate::app::settings::is_adult_track(&track) {
+                self.controller.play_track(track, start_paused, position, soft_reload).await;
+                return;
+            }
+            match self.queue.skip_track().await {
+                Some(next) => { track = next; position = Duration::ZERO; }
+                None => break,
+            }
+        }
+        self.controller.stop().await;
     }
 
     async fn load_standalone(
@@ -392,8 +406,7 @@ impl AudioSystem {
             .load(crate::audio::queue::PlaybackContext::Standalone, tracks, 0)
             .await
         {
-            self.controller
-                .play_track(track, start_paused, position, false)
+            self.play_filtered_track(track, start_paused, position, false)
                 .await;
         }
     }
@@ -431,9 +444,8 @@ impl AudioSystem {
                     self.signals.set_buffering(false);
                 }
             },
-            AudioMessage::TrackWaveFetched { generation, seed_id, seeds, result } => {
+            AudioMessage::TrackWaveFetched { generation, previous_seeds, seeds, result } => {
                 if self.context_generation.load(Ordering::Acquire) != generation
-                    || self.signals.current_track.get().is_none_or(|track| track.id != seed_id)
                 { return; }
                 match result {
                     Ok((ctx, tracks, _)) => {
@@ -443,7 +455,11 @@ impl AudioSystem {
                             self.send_wave_started();
                         }
                     }
-                    Err(error) => (self.error_sink)(error),
+                    Err(error) => {
+                        self.signals.current_wave_seeds.set(previous_seeds);
+                        self.signals.changed.send_replace(());
+                        (self.error_sink)(error);
+                    },
                 }
             }
             AudioMessage::PlayPause => {
@@ -471,15 +487,13 @@ impl AudioSystem {
                     self.signals
                         .update_progress(0, self.signals.duration_ms.get());
                 } else if let Some(prev_track) = self.queue.get_previous_track() {
-                    self.controller
-                        .play_track(prev_track, false, Duration::ZERO, false)
+                    self.play_filtered_track(prev_track, false, Duration::ZERO, false)
                         .await;
                 }
             }
             AudioMessage::PreviousTrack => {
                 if let Some(prev_track) = self.queue.get_previous_track() {
-                    self.controller
-                        .play_track(prev_track, false, Duration::ZERO, false)
+                    self.play_filtered_track(prev_track, false, Duration::ZERO, false)
                         .await;
                 }
             }
@@ -493,6 +507,37 @@ impl AudioSystem {
             }
             AudioMessage::ToggleMute => self.controller.toggle_mute(),
 
+            AudioMessage::PlayTrackList(ids, selected) => {
+                let generation = self.begin_context_change();
+                let api = self.yandex.api.clone();
+                let db = self.db.clone();
+                let stream_manager = self.queue.stream_manager.clone();
+                let current_generation = self.context_generation.clone();
+                self.spawn_fetch_context(generation, move || async move {
+                    let offline = stream_manager.is_track_offline(&selected).await;
+                    let mut fetched = std::collections::HashMap::new();
+                    for chunk in ids.chunks(50) {
+                        if current_generation.load(Ordering::Acquire) != generation {
+                            return Err("Cancelled".to_string());
+                        }
+                        if !offline {
+                            if let Ok(tracks) = api.fetch_tracks(chunk.to_vec()).await {
+                                for track in tracks { fetched.insert(track.id.clone(), track); }
+                                continue;
+                            }
+                        }
+                        let metadata = db.lock().await.get_track_metadata(chunk).await.map_err(|e| e.to_string())?;
+                        for entry in metadata {
+                            let track = crate::util::track::track_from_metadata(&entry);
+                            fetched.insert(track.id.clone(), track);
+                        }
+                    }
+                    let tracks: im::Vector<_> = ids.iter().filter_map(|id| fetched.remove(id)).collect();
+                    let index = tracks.iter().position(|track| track.id == selected)
+                        .ok_or_else(|| "Selected track unavailable".to_string())?;
+                    Ok((crate::audio::queue::PlaybackContext::Standalone, tracks, index))
+                });
+            }
             AudioMessage::PlayTrack(track) => {
                 self.begin_context_change();
                 self.load_standalone(im::Vector::from(vec![track]), false, Duration::ZERO)
@@ -569,7 +614,10 @@ impl AudioSystem {
                     seeds.len() == 1 && crate::audio::queue::clean_wave_seed(&seeds[0])
                         == format!("track:{}", crate::util::track::CleanId::to_base_id(track.id.as_str()))
                 });
-                if let Some(current) = current {
+                if current.is_some() {
+                    let previous_seeds = self.signals.current_wave_seeds.get();
+                    self.signals.current_wave_seeds.set(seeds.clone());
+                    self.signals.changed.send_replace(());
                     let tx = self.tx.clone();
                     tokio::spawn(async move {
                         let clean = seeds.iter().map(|seed| crate::audio::queue::clean_wave_seed(seed)).collect();
@@ -580,7 +628,7 @@ impl AudioSystem {
                                 Ok((crate::audio::queue::PlaybackContext::Wave(session), tracks, 0))
                             }).map_err(|e| format!("Failed to start wave: {e}"));
                         let _ = tx.send(AudioMessage::TrackWaveFetched {
-                            generation, seed_id: current.id, seeds, result,
+                            generation, previous_seeds, seeds, result,
                         }).await;
                     });
                 } else {
@@ -732,8 +780,7 @@ impl AudioSystem {
             if self.queue.in_wave() {
                 self.send_wave_track_started(&next_track);
             }
-            self.controller
-                .play_track(next_track, false, Duration::ZERO, false)
+            self.play_filtered_track(next_track, false, Duration::ZERO, false)
                 .await;
         } else {
             // Queue ended, start "My Wave"

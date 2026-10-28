@@ -11,6 +11,7 @@ import 'package:yayma/src/rust/api/models.dart';
 
 final FlutterSignal<List<SimpleTrackDto>> likedTracksSignal =
     signal<List<SimpleTrackDto>>([]);
+final Set<String> _deletedPlaylistKeys = {};
 final FlutterSignal<List<SimplePlaylistDto>> playlistsSignal =
     signal<List<SimplePlaylistDto>>([]);
 final FlutterSignal<List<SimpleAlbumDto>> likedAlbumsSignal =
@@ -141,12 +142,14 @@ Future<void> initLibrary() async {
 }
 
 Future<void> disposeLibrary() async {
+  dislikedTracksSignal.value = [];
   _librarySearchDebouncer.dispose();
   final sub = _likedSub;
   _likedSub = null;
   await sub?.cancel();
   _resetLikedAccum();
   likedTracksSignal.value = [];
+  _deletedPlaylistKeys.clear();
   playlistsSignal.value = [];
   likedAlbumsSignal.value = [];
   likedArtistsSignal.value = [];
@@ -167,10 +170,22 @@ Future<void> refreshDownloadedTracks() async {
   }
 }
 
+void reconcilePlaylists(List<SimplePlaylistDto> playlists) {
+  playlistsSignal.value = playlists
+      .where((p) => !_deletedPlaylistKeys.contains('${p.uid}:${p.kind}'))
+      .toList();
+}
+
+void applyPlaylistDeletion(int ownerUid, int kind) {
+  _deletedPlaylistKeys.add('$ownerUid:$kind');
+  reconcilePlaylists(playlistsSignal.peek());
+  _pruneMembershipKind(kind);
+}
+
 Future<void> refreshPlaylists() async {
   final playlists = await runRustFetch((ctx) => getPlaylists(ctx: ctx));
   if (playlists != null) {
-    playlistsSignal.value = playlists;
+    reconcilePlaylists(playlists);
   }
 }
 
@@ -653,9 +668,12 @@ Future<bool> createPlaylistAction(
 }
 
 Future<bool> deletePlaylistAction(int kind) async {
-  final success = await runRustAction((ctx) => deletePlaylist(ctx: ctx, kind: kind));
+  final ownerUid = accountSignal.peek()?.uid;
+  final success = await runRustAction(
+    (ctx) => deletePlaylist(ctx: ctx, kind: kind),
+  );
   if (success) {
-    _pruneMembershipKind(kind);
+    if (ownerUid != null) applyPlaylistDeletion(ownerUid, kind);
     await refreshPlaylists();
   }
   return success;
@@ -759,4 +777,10 @@ Future<int> deleteAllLikedTracksAction(List<SimpleTrackDto> tracks) async {
   if (deleted > 0) unawaited(refreshDownloadedTracks());
 
   return deleted;
+}
+
+final FlutterSignal<List<SimpleTrackDto>> dislikedTracksSignal = signal([]);
+Future<void> refreshDislikedTracks() async {
+  final tracks = await runRustFetch((ctx) => getDislikedTracks(ctx: ctx));
+  if (tracks != null) dislikedTracksSignal.value = tracks;
 }

@@ -60,30 +60,11 @@ impl YandexProvider {
                 let target_index = track_id
                     .as_ref()
                     .and_then(|id| partial.iter().position(|p| p.id == *id));
-                // Resolve a window around the target so playback starts fast
-                // even deep inside a big playlist; the rest stays lazy.
-                // NOTE: QueueManager derives the lazy tail as
-                // `all_ids.skip(loaded_count)`, so the context playlist is
-                // trimmed to `ids[window_start..]` — tracks before the window
-                // are dropped (Prev limited to the window) but the pending
-                // tail stays exact.
-                let (window_start, window): (usize, Vec<_>) = match target_index {
-                    Some(idx) if idx >= crate::audio::fetcher::FETCH_BATCH_SIZE => {
-                        let half = crate::audio::fetcher::FETCH_BATCH_SIZE / 2;
-                        let start = idx.saturating_sub(half);
-                        let end =
-                            (start + crate::audio::fetcher::FETCH_BATCH_SIZE).min(partial.len());
-                        (start, partial[start..end].to_vec())
-                    }
-                    _ => (
-                        0,
-                        partial
-                            .iter()
-                            .take(crate::audio::fetcher::FETCH_BATCH_SIZE)
-                            .cloned()
-                            .collect(),
-                    ),
-                };
+                // Keep the complete prefix so Previous can reach every earlier song.
+                let end = target_index.map(|index| index + crate::audio::fetcher::FETCH_BATCH_SIZE)
+                    .unwrap_or(crate::audio::fetcher::FETCH_BATCH_SIZE).min(partial.len());
+                let window_start = 0;
+                let window = partial[..end].to_vec();
                 {
                     let initial = crate::util::track::fetch_full_tracks(
                         &self.api,

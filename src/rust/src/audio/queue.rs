@@ -1075,6 +1075,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn visible_list_next_then_previous_returns_selected_song() {
+        let mut q = manager().await;
+        q.load(PlaybackContext::Standalone, standalone(4), 1).await;
+        assert_eq!(q.get_previous_track().unwrap().id, "t0");
+        // Reload at the selected position, then advance naturally.
+        q.load(PlaybackContext::Standalone, standalone(4), 1).await;
+        let next = q.get_next_track().await;
+        assert_eq!(next.unwrap().id, "t2");
+        assert_eq!(q.get_previous_track().unwrap().id, "t1");
+    }
+
+    #[tokio::test]
     async fn load_keeps_prefix_so_prev_works_from_middle() {
         let mut q = manager().await;
         let first = q

@@ -11,7 +11,7 @@ pub enum AudioMessage {
     },
     TrackWaveFetched {
         generation: u64,
-        seed_id: String,
+        previous_seeds: Vec<String>,
         seeds: Vec<String>,
         result: Result<(PlaybackContext, Vector<Track>, usize), String>,
     },
@@ -34,6 +34,7 @@ pub enum AudioMessage {
 
     // Queue & Context
     PlayTrack(Track),
+    PlayTrackList(Vec<String>, String),
     /// Restores a persisted session: the track, where it left off, and whether it
     /// was playing. The play state has to ride along with the track — resuming with
     /// a separate `Resume` message races the spawned playback task, which applies
