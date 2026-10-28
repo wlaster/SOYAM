@@ -386,6 +386,7 @@ class _HomeMainControls extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
+                    tooltip: isDisliked ? 'Снять дизлайк' : 'Дизлайк',
                     icon: Icon(
                       isDisliked
                           ? Icons.heart_broken
@@ -400,6 +401,7 @@ class _HomeMainControls extends StatelessWidget {
                         : null,
                   ),
                   IconButton(
+                    tooltip: 'Предыдущий трек',
                     icon: Icon(
                       Icons.skip_previous_rounded,
                       size: 42,
@@ -408,6 +410,7 @@ class _HomeMainControls extends StatelessWidget {
                     onPressed: () => unawaited(PlaybackController.prev()),
                   ),
                   IconButton(
+                    tooltip: isPlaying ? 'Пауза' : 'Воспроизвести',
                     iconSize: 84,
                     icon: Icon(
                       isPlaying
@@ -418,6 +421,7 @@ class _HomeMainControls extends StatelessWidget {
                     onPressed: () => unawaited(PlaybackController.togglePlay()),
                   ),
                   IconButton(
+                    tooltip: 'Следующий трек',
                     icon: Icon(
                       Icons.skip_next_rounded,
                       size: 42,
@@ -449,6 +453,9 @@ class _HomeMainControls extends StatelessWidget {
                   Row(
                     children: [
                       IconButton(
+                        tooltip: showLyricsSignal.value
+                            ? 'Скрыть текст'
+                            : 'Показать текст',
                         icon: Icon(
                           Icons.lyrics_rounded,
                           size: 24,
@@ -458,6 +465,7 @@ class _HomeMainControls extends StatelessWidget {
                             showLyricsSignal.value = !showLyricsSignal.value,
                       ),
                       IconButton(
+                        tooltip: 'Перемешивание',
                         icon: Icon(
                           Icons.shuffle,
                           size: 24,
@@ -471,6 +479,7 @@ class _HomeMainControls extends StatelessWidget {
                   Row(
                     children: [
                       IconButton(
+                        tooltip: 'Режим повтора',
                         icon: Icon(repeatIcon, size: 24, color: repeatColor),
                         onPressed: () =>
                             unawaited(PlaybackController.toggleRepeat()),
@@ -495,6 +504,9 @@ class _HomeMainControls extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
+                  tooltip: showLyricsSignal.value
+                      ? 'Скрыть текст'
+                      : 'Показать текст',
                   icon: Icon(
                     Icons.lyrics_rounded,
                     size: small ? 20 : 24,
@@ -505,6 +517,7 @@ class _HomeMainControls extends StatelessWidget {
                 ),
                 SizedBox(width: small ? 8 : 12),
                 IconButton(
+                  tooltip: 'Перемешивание',
                   icon: Icon(
                     Icons.shuffle,
                     size: small ? 20 : 24,
@@ -515,6 +528,7 @@ class _HomeMainControls extends StatelessWidget {
                 ),
                 SizedBox(width: small ? 8 : 12),
                 IconButton(
+                  tooltip: isDisliked ? 'Снять дизлайк' : 'Дизлайк',
                   icon: Icon(
                     isDisliked
                         ? Icons.heart_broken
@@ -530,6 +544,7 @@ class _HomeMainControls extends StatelessWidget {
                 ),
                 SizedBox(width: small ? 12 : 20),
                 IconButton(
+                  tooltip: 'Предыдущий трек',
                   icon: Icon(
                     Icons.skip_previous_rounded,
                     size: small ? 32 : 42,
@@ -539,6 +554,7 @@ class _HomeMainControls extends StatelessWidget {
                 ),
                 SizedBox(width: small ? 8 : 12),
                 IconButton(
+                  tooltip: isPlaying ? 'Пауза' : 'Воспроизвести',
                   iconSize: small ? 56 : 72,
                   icon: Icon(
                     isPlaying
@@ -550,6 +566,7 @@ class _HomeMainControls extends StatelessWidget {
                 ),
                 SizedBox(width: small ? 8 : 12),
                 IconButton(
+                  tooltip: 'Следующий трек',
                   icon: Icon(
                     Icons.skip_next_rounded,
                     size: small ? 32 : 42,
@@ -569,6 +586,7 @@ class _HomeMainControls extends StatelessWidget {
                 ),
                 SizedBox(width: small ? 8 : 12),
                 IconButton(
+                  tooltip: 'Режим повтора',
                   icon: Icon(
                     repeatIcon,
                     size: small ? 20 : 24,

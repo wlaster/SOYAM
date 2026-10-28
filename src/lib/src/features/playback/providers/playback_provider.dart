@@ -587,6 +587,21 @@ class PlaybackController {
     if (await start()) activeCollectionSignal.value = key;
   }
 
+  static Future<void> playTrackList(
+    List<SimpleTrackDto> tracks,
+    String selectedId, {
+    String? collectionKey,
+  }) => _startCollection(
+    collectionKey,
+    () => runRustAction(
+      (ctx) => rust.playTrackList(
+        ctx: ctx,
+        trackIds: tracks.map((t) => t.id).toList(),
+        selectedId: selectedId,
+      ),
+    ),
+  );
+
   static Future<void> playTrack(String trackId) => _startCollection(
     null,
     () => runRustAction((ctx) => rust.playTrack(ctx: ctx, trackId: trackId)),

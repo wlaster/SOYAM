@@ -241,8 +241,10 @@ class _SearchResults extends StatelessWidget {
                 horizontal: context.horizontalPadding,
                 vertical: 4,
               ),
-              itemBuilder: (context, i) =>
-                  _TrackSearchTile(track: results.tracks[i]),
+              itemBuilder: (context, i) => _TrackSearchTile(
+                track: results.tracks[i],
+                tracks: results.tracks,
+              ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 40)),
           ],
@@ -256,7 +258,8 @@ class _SearchResults extends StatelessWidget {
 class _TrackSearchTile extends StatelessWidget {
   final SimpleTrackDto track;
 
-  const _TrackSearchTile({required this.track});
+  final List<SimpleTrackDto> tracks;
+  const _TrackSearchTile({required this.track, required this.tracks});
 
   @override
   Widget build(BuildContext context) {
@@ -269,7 +272,7 @@ class _TrackSearchTile extends StatelessWidget {
       leading: AppCover(coverUrl: track.coverUrl),
       durationMs: track.durationMs,
       isLiked: track.isLiked,
-      onTap: () => PlaybackController.playTrack(track.id),
+      onTap: () => PlaybackController.playTrackList(tracks, track.id),
       onTitleTap: () {
         if (track.albumId != null) {
           navigateTo(AppSection.album, track.albumId);

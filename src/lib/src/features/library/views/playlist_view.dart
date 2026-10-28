@@ -447,6 +447,7 @@ class _PlaylistContentState extends State<_PlaylistContent> {
               final track = _localTracks[index];
               return _TrackTile(
                 track: track,
+                queue: _localTracks,
                 index: index,
                 playlist: widget.playlist,
                 onRemove: () async {
@@ -472,6 +473,7 @@ class _PlaylistContentState extends State<_PlaylistContent> {
                   key: ValueKey('${track.id}_$index'),
                   child: _TrackTile(
                     track: track,
+                    queue: _localTracks,
                     index: index,
                     playlist: widget.playlist,
                     dragEnabled: true,
@@ -578,13 +580,16 @@ class _PlaylistContentState extends State<_PlaylistContent> {
             AppDialog.cancelButton(context),
             ElevatedButton(
               onPressed: () async {
-                await deletePlaylistAction(playlist.kind);
-                if (context.mounted) {
+                final deleted = await deletePlaylistAction(playlist.kind);
+                if (deleted && context.mounted) {
                   Navigator.pop(context);
                   setSection(AppSection.liked);
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: cs.error),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.error,
+                foregroundColor: cs.onError,
+              ),
               child: const Text('Удалить'),
             ),
           ],
@@ -596,6 +601,7 @@ class _PlaylistContentState extends State<_PlaylistContent> {
 
 class _TrackTile extends StatelessWidget {
   final SimpleTrackDto track;
+  final List<SimpleTrackDto> queue;
   final int index;
   final PlaylistDetailsDto playlist;
   final VoidCallback onRemove;
@@ -603,6 +609,7 @@ class _TrackTile extends StatelessWidget {
 
   const _TrackTile({
     required this.track,
+    required this.queue,
     required this.index,
     required this.playlist,
     required this.onRemove,
@@ -645,10 +652,10 @@ class _TrackTile extends StatelessWidget {
           tooltip: 'Удалить из плейлиста',
         ),
       ],
-      onTap: () => PlaybackController.playPlaylistTrack(
-        playlist.uid.toString(),
-        playlist.kind,
+      onTap: () => PlaybackController.playTrackList(
+        queue,
         track.id,
+        collectionKey: 'playlist:${playlist.uid}:${playlist.kind}',
       ),
       onTitleTap: () {
         if (track.albumId != null) {

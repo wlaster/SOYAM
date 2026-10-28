@@ -155,7 +155,6 @@ class WaveSettingsPanel extends StatelessWidget {
                         _CharacterCard(
                           label: 'Любимое',
                           icon: Icons.favorite,
-                          color: Colors.red,
                           seed: 'personal:collection',
                           onSelected: onSelected,
                           isSelected: currentSeeds.contains(
@@ -166,7 +165,6 @@ class WaveSettingsPanel extends StatelessWidget {
                         _CharacterCard(
                           label: 'Незнакомое',
                           icon: Icons.auto_awesome,
-                          color: Colors.amber,
                           seed: 'personal:never-heard',
                           onSelected: onSelected,
                           isSelected: currentSeeds.contains(
@@ -177,7 +175,6 @@ class WaveSettingsPanel extends StatelessWidget {
                         _CharacterCard(
                           label: 'Популярное',
                           icon: Icons.bolt,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           seed: 'personal:hits',
                           onSelected: onSelected,
                           isSelected: currentSeeds.contains('personal:hits'),
@@ -450,14 +447,12 @@ class _RoundedChip extends StatelessWidget {
 class _CharacterCard extends StatelessWidget {
   final String label;
   final IconData icon;
-  final Color color;
   final String seed;
   final VoidCallback onSelected;
   final bool isSelected;
   const _CharacterCard({
     required this.label,
     required this.icon,
-    required this.color,
     required this.seed,
     required this.onSelected,
     required this.isSelected,
@@ -490,22 +485,43 @@ class _CharacterCard extends StatelessWidget {
                     ).colorScheme.onSurface.withValues(alpha: 0.1),
             ),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              Icon(icon, color: color, size: 28),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: isSelected
-                      ? Theme.of(context).colorScheme.onSurface
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontWeight: isSelected ? FontWeight.w900 : FontWeight.bold,
-                  fontSize: 12,
+              Positioned(
+                right: -8,
+                top: -14,
+                child: Transform.rotate(
+                  angle: -0.18,
+                  child: Icon(
+                    icon,
+                    color: Theme.of(context).colorScheme.primary.withValues(
+                      alpha: isSelected ? 0.32 : 0.18,
+                    ),
+                    size: 100,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 14,
+                right: 10,
+                bottom: 14,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: isSelected ? FontWeight.w900 : FontWeight.bold,
+                    fontSize: 13,
+                    shadows: [
+                      Shadow(
+                        color: Theme.of(context).colorScheme.surface,
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

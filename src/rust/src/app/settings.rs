@@ -43,6 +43,8 @@ pub async fn load_persisted_settings(ctx: &AppContext) {
         ctx.core.api.set_quality(quality);
     }
 
+    ALLOW_ADULT_CONTENT.store(parse_setting::<bool>(&settings, "allow_adult_content").unwrap_or(true), std::sync::atomic::Ordering::Relaxed);
+
     let vibe_enabled = parse_setting::<bool>(&settings, "vibe_animation_enabled").unwrap_or(true);
     ctx.audio.signals.vibe_enabled.set(vibe_enabled);
 
@@ -93,5 +95,29 @@ pub async fn load_persisted_settings(ctx: &AppContext) {
                 }
             }
         }
+    }
+}
+
+pub(crate) static ALLOW_ADULT_CONTENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+pub(crate) fn is_adult_track(track: &yandex_music::model::track::Track) -> bool {
+    track.explicit == Some(true) || track.content_warning.as_deref().is_some_and(|v| v.eq_ignore_ascii_case("explicit"))
+        || track.albums.iter().any(|album| album.explicit == Some(true) || album.content_warning.as_deref().is_some_and(|v| v.eq_ignore_ascii_case("explicit")))
+}
+
+#[cfg(test)]
+mod adult_content_tests {
+    use super::is_adult_track;
+    #[test]
+    fn filters_explicit_flags_and_warning_but_keeps_clean_tracks() {
+        let mut track = crate::util::track::test_track("adult-filter");
+        assert!(!is_adult_track(&track));
+        track.explicit = Some(true);
+        assert!(is_adult_track(&track));
+        track.explicit = Some(false);
+        track.content_warning = Some("explicit".into());
+        assert!(is_adult_track(&track));
+        track.content_warning = Some("clean".into());
+        assert!(!is_adult_track(&track));
     }
 }

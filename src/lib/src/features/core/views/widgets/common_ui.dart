@@ -5,9 +5,11 @@ import 'package:flutter/gestures.dart';
 import 'package:m3e_core/m3e_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:signals_flutter/signals_flutter.dart';
+import 'package:yayma/src/features/core/providers/visual_effects_provider.dart';
 import 'package:yayma/src/features/core/theme/app_tokens.dart';
 import 'package:yayma/src/features/core/views/widgets/app_context_menu.dart';
 import 'package:yayma/src/features/core/views/widgets/app_cover.dart';
+import 'package:yayma/src/features/core/views/widgets/progress_appearance_slider.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 import 'package:yayma/src/features/core/views/widgets/smooth_scroll.dart';
 import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
@@ -888,6 +890,22 @@ class _CommonProgressSliderState extends State<CommonProgressSlider> {
             context,
           ).colorScheme.onSurfaceVariant;
 
+          final appearance = visibleSignal(context, progressAppearanceSignal);
+          Widget slider(Widget standard) =>
+              appearance == ProgressAppearance.standard
+              ? standard
+              : ProgressAppearanceSlider(
+                  appearance: appearance,
+                  value: displayPosition.clamp(0, maxDur),
+                  max: maxDur,
+                  color: accentColor,
+                  inactiveColor: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.15),
+                  onStart: _onDragStart,
+                  onChanged: _onDragUpdate,
+                  onEnd: _onDragEnd,
+                );
           return widget.compact
               ? Row(
                   children: [
@@ -908,21 +926,23 @@ class _CommonProgressSliderState extends State<CommonProgressSlider> {
                       child: ClipRect(
                         child: SizedBox(
                           height: 28,
-                          child: M3ESlider(
-                            value: displayPosition.clamp(0, maxDur),
-                            max: maxDur,
-                            decoration: expressSliderDecoration(
-                              activeColor: accentColor,
-                              trackHeight: trackHeight,
-                              thumbWidth: thumbRadius,
-                              thumbHeight: thumbRadius * 3.5,
-                              inactiveColor: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.15),
+                          child: slider(
+                            M3ESlider(
+                              value: displayPosition.clamp(0, maxDur),
+                              max: maxDur,
+                              decoration: expressSliderDecoration(
+                                activeColor: accentColor,
+                                trackHeight: trackHeight,
+                                thumbWidth: thumbRadius,
+                                thumbHeight: thumbRadius * 3.5,
+                                inactiveColor: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.15),
+                              ),
+                              onChangeStart: _onDragStart,
+                              onChanged: _onDragUpdate,
+                              onChangeEnd: _onDragEnd,
                             ),
-                            onChangeStart: _onDragStart,
-                            onChanged: _onDragUpdate,
-                            onChangeEnd: _onDragEnd,
                           ),
                         ),
                       ),
@@ -944,21 +964,23 @@ class _CommonProgressSliderState extends State<CommonProgressSlider> {
                 )
               : Column(
                   children: [
-                    M3ESlider(
-                      value: displayPosition.clamp(0.0, maxDur),
-                      max: maxDur,
-                      decoration: expressSliderDecoration(
-                        activeColor: accentColor,
-                        trackHeight: trackHeight,
-                        thumbWidth: thumbRadius * 1.4,
-                        thumbHeight: thumbRadius * 4,
-                        inactiveColor: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.15),
+                    slider(
+                      M3ESlider(
+                        value: displayPosition.clamp(0.0, maxDur),
+                        max: maxDur,
+                        decoration: expressSliderDecoration(
+                          activeColor: accentColor,
+                          trackHeight: trackHeight,
+                          thumbWidth: thumbRadius * 1.4,
+                          thumbHeight: thumbRadius * 4,
+                          inactiveColor: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.15),
+                        ),
+                        onChangeStart: _onDragStart,
+                        onChanged: _onDragUpdate,
+                        onChangeEnd: _onDragEnd,
                       ),
-                      onChangeStart: _onDragStart,
-                      onChanged: _onDragUpdate,
-                      onChangeEnd: _onDragEnd,
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1085,68 +1107,73 @@ class _AnimatedLikeButtonState extends State<AnimatedLikeButton>
         ? (widget.likedColor ?? Colors.redAccent)
         : cs.onSurfaceVariant;
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      // Local Material: ink paints here, not on a Material buried under the
-      // player backdrop, where the hover layer would be invisible.
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          // Matches the global iconButtonTheme corner radius so the hover
-          // backdrop looks identical to neighbouring player buttons.
-          borderRadius: BorderRadius.circular(14),
-          // Match the M3 IconButton state layer, otherwise hover is invisible.
-          hoverColor: widget.showBackground
-              ? cs.onSurfaceVariant.withValues(alpha: 0.1)
-              : Colors.transparent,
-          highlightColor: widget.showBackground
-              ? cs.onSurfaceVariant.withValues(alpha: 0.1)
-              : Colors.transparent,
-          splashColor: widget.showBackground ? null : Colors.transparent,
-          focusColor: widget.showBackground ? null : Colors.transparent,
-          child: SizedBox(
-            width: math.max<double>(hexSize + 12, 40),
-            height: math.max<double>(hexSize + 12, 40),
-            child: AnimatedBuilder(
-              animation: _burst,
-              builder: (context, child) {
-                return Stack(
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.none,
-                  children: [
-                    if (_burst.isAnimating || _burst.value > 0)
-                      CustomPaint(
-                        size: Size(hexSize * 2.4, hexSize * 2.4),
-                        painter: _BurstPainter(
-                          progress: _ringGrowth.value,
-                          opacity: _ringFade.value,
+    return Tooltip(
+      message: widget.isLiked ? 'Убрать из любимых' : 'В любимые',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        // Local Material: ink paints here, not on a Material buried under the
+        // player backdrop, where the hover layer would be invisible.
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            // Matches the global iconButtonTheme corner radius so the hover
+            // backdrop looks identical to neighbouring player buttons.
+            borderRadius: BorderRadius.circular(14),
+            // Match the M3 IconButton state layer, otherwise hover is invisible.
+            hoverColor: widget.showBackground
+                ? cs.onSurfaceVariant.withValues(alpha: 0.1)
+                : Colors.transparent,
+            highlightColor: widget.showBackground
+                ? cs.onSurfaceVariant.withValues(alpha: 0.1)
+                : Colors.transparent,
+            splashColor: widget.showBackground ? null : Colors.transparent,
+            focusColor: widget.showBackground ? null : Colors.transparent,
+            child: SizedBox(
+              width: math.max<double>(hexSize + 12, 40),
+              height: math.max<double>(hexSize + 12, 40),
+              child: AnimatedBuilder(
+                animation: _burst,
+                builder: (context, child) {
+                  return Stack(
+                    alignment: Alignment.center,
+                    clipBehavior: Clip.none,
+                    children: [
+                      if (_burst.isAnimating || _burst.value > 0)
+                        CustomPaint(
+                          size: Size(hexSize * 2.4, hexSize * 2.4),
+                          painter: _BurstPainter(
+                            progress: _ringGrowth.value,
+                            opacity: _ringFade.value,
+                            color: color,
+                          ),
+                        ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 320),
+                        switchInCurve: Curves.easeOutBack,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(
+                              scale: animation,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Icon(
+                          widget.isLiked
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          key: ValueKey<bool>(widget.isLiked),
+                          size: hexSize,
                           color: color,
                         ),
                       ),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 320),
-                      switchInCurve: Curves.easeOutBack,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: ScaleTransition(
-                            scale: animation,
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: Icon(
-                        widget.isLiked ? Icons.favorite : Icons.favorite_border,
-                        key: ValueKey<bool>(widget.isLiked),
-                        size: hexSize,
-                        color: color,
-                      ),
-                    ),
-                  ],
-                );
-              },
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),

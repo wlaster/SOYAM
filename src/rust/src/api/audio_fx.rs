@@ -123,3 +123,16 @@ pub async fn set_effect_param(ctx: &AppContext, id: String, index: u32, value: f
         SETTINGS_CHANGED.notify_one();
     }
 }
+
+pub async fn get_adult_content_enabled(_ctx: &AppContext) -> bool {
+    crate::app::settings::ALLOW_ADULT_CONTENT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub async fn set_adult_content_enabled(ctx: &AppContext, enabled: bool) -> Result<(), String> {
+    ctx.core.db.lock().await.save_setting("allow_adult_content", &enabled).await.map_err(|e| e.to_string())?;
+    crate::app::settings::ALLOW_ADULT_CONTENT.store(enabled, std::sync::atomic::Ordering::Relaxed);
+    if !enabled && ctx.audio.signals.current_track.get().as_ref().is_some_and(crate::app::settings::is_adult_track) {
+        let _ = ctx.audio.tx.send(AudioMessage::Next).await;
+    }
+    Ok(())
+}

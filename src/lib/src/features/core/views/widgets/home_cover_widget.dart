@@ -17,10 +17,14 @@ class HomeCoverWidget extends StatefulWidget {
 }
 
 class _HomeCoverWidgetState extends State<HomeCoverWidget> {
+  Timer? _activatedTimer;
+  final ValueNotifier<bool> _activated = ValueNotifier(false);
   final ValueNotifier<bool> _hovered = ValueNotifier(false);
 
   @override
   void dispose() {
+    _activatedTimer?.cancel();
+    _activated.dispose();
     _hovered.dispose();
     super.dispose();
   }
@@ -57,10 +61,19 @@ class _HomeCoverWidgetState extends State<HomeCoverWidget> {
           cursor: meta.id != null
               ? SystemMouseCursors.click
               : SystemMouseCursors.basic,
-          onTap: meta.id != null
-              ? () => unawaited(
-                  PlaybackController.startTrackWave(meta.id!, meta.title),
-                )
+          onDoubleTap: meta.id != null
+              ? () {
+                  if (_activated.value) return;
+                  _activated.value = true;
+                  _activatedTimer?.cancel();
+                  _activatedTimer = Timer(
+                    const Duration(seconds: 2),
+                    () => _activated.value = false,
+                  );
+                  unawaited(
+                    PlaybackController.startTrackWave(meta.id!, meta.title),
+                  );
+                }
               : null,
           child: AnimatedScale(
             scale: isPlaying ? 1.0 : AppCoverMotion.largePausedScale,
@@ -98,11 +111,11 @@ class _HomeCoverWidgetState extends State<HomeCoverWidget> {
                     ),
                     if (meta.id != null)
                       Positioned.fill(
-                        child: ValueListenableBuilder<bool>(
-                          valueListenable: _hovered,
-                          builder: (context, hovered, _) => AnimatedOpacity(
+                        child: AnimatedBuilder(
+                          animation: Listenable.merge([_hovered, _activated]),
+                          builder: (context, _) => AnimatedOpacity(
                             key: const ValueKey('home-cover-wave-hover'),
-                            opacity: hovered ? 1 : 0,
+                            opacity: _hovered.value || _activated.value ? 1 : 0,
                             duration: const Duration(milliseconds: 150),
                             child: Container(
                               decoration: BoxDecoration(
@@ -112,18 +125,21 @@ class _HomeCoverWidgetState extends State<HomeCoverWidget> {
                                 ),
                               ),
                               alignment: Alignment.center,
-                              child: const Column(
+                              child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(
+                                  const Icon(
                                     Icons.waves_rounded,
                                     size: 40,
                                     color: Colors.white,
                                   ),
-                                  SizedBox(height: 10),
+                                  const SizedBox(height: 10),
                                   Text(
-                                    'Волна по треку',
-                                    style: TextStyle(
+                                    _activated.value
+                                        ? 'Волна активирована'
+                                        : 'Волна по треку · двойной клик',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,

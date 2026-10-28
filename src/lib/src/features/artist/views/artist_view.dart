@@ -321,7 +321,8 @@ class _ArtistViewState extends State<ArtistView> {
                   ),
                   durationMs: track.durationMs,
                   isLiked: track.isLiked,
-                  onTap: () => PlaybackController.playTrack(track.id),
+                  onTap: () =>
+                      PlaybackController.playTrackList(tracks, track.id),
                   onTitleTap: () {
                     if (track.albumId != null) {
                       navigateTo(AppSection.album, track.albumId);

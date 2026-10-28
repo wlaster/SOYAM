@@ -60,6 +60,8 @@ class _LibraryViewState extends State<LibraryView>
           await refreshLikedAlbums();
         case 3:
           await refreshLikedArtists();
+        case 4:
+          await refreshDislikedTracks();
       }
     } finally {
       _refreshBusy = false;
@@ -73,12 +75,15 @@ class _LibraryViewState extends State<LibraryView>
     final initialIndex = currentSection == AppSection.playlists ? 1 : 0;
     _root = currentRootSignal.value;
     _tabController = TabController(
-      length: 4,
+      length: 5,
       vsync: this,
       initialIndex: initialIndex,
     );
     _searchController.text = librarySearchQuerySignal.value;
     _tabController.addListener(() {
+      if (_tabController.index == 4 && !_tabController.indexIsChanging) {
+        unawaited(refreshDislikedTracks());
+      }
       if (mounted) setState(() {});
     });
     _searchController.addListener(() {
@@ -245,6 +250,7 @@ class _LibraryViewState extends State<LibraryView>
               Tab(text: 'Плейлисты'),
               Tab(text: 'Любимые альбомы'),
               Tab(text: 'Любимые исполнители'),
+              Tab(text: 'Дизлайки'),
             ],
           ),
         ),
@@ -256,6 +262,7 @@ class _LibraryViewState extends State<LibraryView>
               const _PlaylistsTab(),
               const _LikedAlbumsTab(),
               const _LikedArtistsTab(),
+              const _DislikedTracksTab(),
             ],
           ),
         ),
@@ -616,7 +623,11 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                             durationMs: track.durationMs,
                             isLiked: track.isLiked,
                             onTap: () => unawaited(
-                              PlaybackController.playLikedTrack(track.id),
+                              PlaybackController.playTrackList(
+                                tracks,
+                                track.id,
+                                collectionKey: 'liked',
+                              ),
                             ),
                             onTitleTap: () {
                               if (track.albumId != null) {
@@ -1128,4 +1139,45 @@ class _PlaylistCardState extends State<_PlaylistCard> {
       ),
     );
   }
+}
+
+class _DislikedTracksTab extends StatelessWidget {
+  const _DislikedTracksTab();
+
+  @override
+  Widget build(BuildContext context) => SignalBuilder(
+    builder: (context) {
+      final tracks = dislikedTracksSignal.value;
+      if (tracks.isEmpty) {
+        return const Center(child: Text('Нет треков с дизлайком'));
+      }
+      return ListView.builder(
+        padding: const EdgeInsets.fromLTRB(40, 16, 40, 140),
+        itemCount: tracks.length,
+        itemBuilder: (context, index) {
+          final track = tracks[index];
+          return CommonTrackTile(
+            trackId: track.id,
+            title: track.title,
+            version: track.version,
+            artists: track.artists,
+            albumId: track.albumId,
+            leading: AppCover(coverUrl: track.coverUrl),
+            durationMs: track.durationMs,
+            isLiked: track.isLiked,
+            trailing: IconButton(
+              tooltip: 'Снять дизлайк',
+              icon: const Icon(Icons.heart_broken_rounded),
+              onPressed: () async {
+                await PlaybackController.toggleDislike(trackId: track.id);
+                await refreshDislikedTracks();
+              },
+            ),
+            onTap: () =>
+                unawaited(PlaybackController.playTrackList(tracks, track.id)),
+          );
+        },
+      );
+    },
+  );
 }

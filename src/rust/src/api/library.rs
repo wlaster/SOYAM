@@ -978,3 +978,10 @@ pub async fn liked_tracks_stream(
         }
     }
 }
+
+pub async fn get_disliked_tracks(ctx: &AppContext) -> Vec<SimpleTrackDto> {
+    let (_, disliked) = ctx.audio.state.read().await.liked.snapshot();
+    let mut ids: Vec<_> = disliked.into_iter().collect();
+    ids.sort();
+    build_track_dtos(ctx, ids).await
+}

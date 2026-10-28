@@ -13,6 +13,7 @@ class HoverScale extends StatefulWidget {
   final Curve curve;
   final MouseCursor cursor;
   final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
   final bool enabled;
   final ValueChanged<bool>? onHoverChanged;
 
@@ -24,6 +25,7 @@ class HoverScale extends StatefulWidget {
     this.curve = Curves.easeOutBack,
     this.cursor = SystemMouseCursors.basic,
     this.onTap,
+    this.onDoubleTap,
     this.enabled = true,
     this.onHoverChanged,
   });
@@ -53,8 +55,12 @@ class _HoverScaleState extends State<HoverScale> {
         setState(() => _hovered = false);
         widget.onHoverChanged?.call(false);
       },
-      child: widget.onTap != null
-          ? GestureDetector(onTap: widget.onTap, child: content)
+      child: widget.onTap != null || widget.onDoubleTap != null
+          ? GestureDetector(
+              onTap: widget.onTap,
+              onDoubleTap: widget.onDoubleTap,
+              child: content,
+            )
           : content,
     );
   }

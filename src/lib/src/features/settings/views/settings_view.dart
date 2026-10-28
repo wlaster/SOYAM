@@ -11,6 +11,7 @@ import 'package:yayma/src/features/core/providers/navigation_provider.dart';
 import 'package:yayma/src/features/core/providers/notification_provider.dart';
 import 'package:yayma/src/features/core/providers/visual_effects_provider.dart';
 import 'package:yayma/src/features/core/services/global_hotkey_service.dart';
+import 'package:yayma/src/features/core/services/rust_bridge.dart';
 import 'package:yayma/src/features/core/theme/app_tokens.dart';
 import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
@@ -19,6 +20,7 @@ import 'package:yayma/src/features/library/providers/library_provider.dart';
 import 'package:yayma/src/features/settings/views/ai_content_reduction_setting.dart';
 import 'package:yayma/src/features/settings/views/lyrics_providers_dialog.dart';
 import 'package:yayma/src/features/settings/views/update_dialog.dart';
+import 'package:yayma/src/rust/api/audio_fx.dart' as audio_settings;
 import 'package:yayma/src/rust/api/content.dart' as rust;
 import 'package:yayma/src/rust/api/recommendations.dart' as recommendations;
 import 'package:yayma/src/rust/api/simple.dart' as simple;
@@ -31,6 +33,7 @@ class SettingsView extends StatefulWidget {
 }
 
 class _SettingsViewState extends State<SettingsView> {
+  late final FutureSignal<bool> _adultContentSignal;
   late final FutureSignal<String?> _pathSignal;
   late final FutureSignal<int> _cacheSizeSignal;
   late final FutureSignal<int> _trackCacheSizeSignal;
@@ -50,6 +53,13 @@ class _SettingsViewState extends State<SettingsView> {
   @override
   void initState() {
     super.initState();
+    _adultContentSignal = futureSignal(
+      () async =>
+          await runRustFetch(
+            (ctx) => audio_settings.getAdultContentEnabled(ctx: ctx),
+          ) ??
+          true,
+    );
     _pathSignal = futureSignal(() async {
       final ctx = appContextSignal.value;
       if (ctx == null) return null;
@@ -295,6 +305,18 @@ class _SettingsViewState extends State<SettingsView> {
                       );
                     },
                   ),
+                  const SizedBox(height: 8),
+                  SignalBuilder(
+                    builder: (context) => _SettingItem(
+                      title: 'Вид бегущей полосы',
+                      subtitle: 'Оформление полосы воспроизведения',
+                      icon: Icons.graphic_eq_rounded,
+                      onTap: () {},
+                      trailing: SettingsProgressAppearanceMenu(
+                        selected: progressAppearanceSignal.value,
+                      ),
+                    ),
+                  ),
                   if (context.isDesktop) ...[
                     const SizedBox(height: 32),
                     const _SectionTitle(title: 'Горячие клавиши'),
@@ -400,6 +422,32 @@ class _SettingsViewState extends State<SettingsView> {
                     onSaveError: () => showAppError(
                       'Не удалось сохранить «Меньше ИИ». Проверьте подключение и повторите.',
                     ),
+                  ),
+                  const SizedBox(height: 32),
+                  const _SectionTitle(title: 'Возрастные ограничения'),
+                  const SizedBox(height: 20),
+                  SignalBuilder(
+                    builder: (context) {
+                      final enabled = _adultContentSignal.value.value ?? true;
+                      return _SettingItem(
+                        title: 'Взрослый контент',
+                        subtitle:
+                            'При выключении треки с пометкой explicit пропускаются',
+                        icon: Icons.explicit_rounded,
+                        trailing: Switch(
+                          value: enabled,
+                          onChanged: (value) async {
+                            final ok = await runRustAction(
+                              (ctx) => audio_settings.setAdultContentEnabled(
+                                ctx: ctx,
+                                enabled: value,
+                              ),
+                            );
+                            if (ok) await _adultContentSignal.refresh();
+                          },
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 32),
                   const _SectionTitle(title: 'Тексты песен'),
@@ -1183,14 +1231,14 @@ class _SettingItem extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Widget? trailing;
 
   const _SettingItem({
     required this.title,
     required this.subtitle,
     required this.icon,
-    required this.onTap,
+    this.onTap,
     this.trailing,
   });
 
@@ -1202,6 +1250,11 @@ class _SettingItem extends StatelessWidget {
     final isNarrow = context.isNarrow;
     return InkWell(
       onTap: onTap,
+      canRequestFocus:
+          onTap != null && trailing is! SettingsProgressAppearanceMenu,
+      focusColor: trailing is SettingsProgressAppearanceMenu
+          ? Colors.transparent
+          : null,
       onHover: (_) {},
       hoverColor: onSurface.withValues(alpha: 0.06),
       borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -1253,6 +1306,100 @@ class _SettingItem extends StatelessWidget {
                   color: onSurfaceVariant,
                   size: isNarrow ? 22 : 24,
                 ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SettingsProgressAppearanceMenu extends StatelessWidget {
+  const SettingsProgressAppearanceMenu({required this.selected, super.key});
+
+  final ProgressAppearance selected;
+
+  static const List<(ProgressAppearance, String)> _styles = [
+    (ProgressAppearance.standard, 'Стандартный'),
+    (ProgressAppearance.android, 'Android'),
+    (ProgressAppearance.visualizer, 'Визуализатор'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final current = _styles.firstWhere((style) => style.$1 == selected);
+    return MenuAnchor(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(colors.surfaceContainerHigh),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        padding: const WidgetStatePropertyAll(EdgeInsets.all(8)),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        ),
+      ),
+      menuChildren: [
+        for (final style in _styles)
+          MenuItemButton(
+            style: ButtonStyle(
+              minimumSize: const WidgetStatePropertyAll(Size(180, 44)),
+              padding: const WidgetStatePropertyAll(
+                EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              shape: WidgetStatePropertyAll(
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              backgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.hovered) ||
+                    states.contains(WidgetState.focused)) {
+                  return colors.primary.withValues(alpha: 0.16);
+                }
+                return style.$1 == selected
+                    ? colors.primary.withValues(alpha: 0.09)
+                    : Colors.transparent;
+              }),
+              foregroundColor: WidgetStatePropertyAll(
+                style.$1 == selected ? colors.primary : colors.onSurface,
+              ),
+            ),
+            onPressed: () => unawaited(setProgressAppearance(style.$1)),
+            child: Text(style.$2),
+          ),
+      ],
+      builder: (context, controller, child) => TextButton(
+        style: ButtonStyle(
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+          textStyle: const WidgetStatePropertyAll(
+            TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          minimumSize: const WidgetStatePropertyAll(Size(0, 52)),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          side: WidgetStatePropertyAll(
+            BorderSide(color: colors.outlineVariant.withValues(alpha: 0.5)),
+          ),
+          foregroundColor: WidgetStatePropertyAll(colors.onSurface),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) =>
+                states.contains(WidgetState.hovered) || controller.isOpen
+                ? colors.primary.withValues(alpha: 0.16)
+                : Colors.transparent,
+          ),
+        ),
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(current.$2),
+            const SizedBox(width: 12),
+            Icon(
+              Icons.expand_more_rounded,
+              size: 20,
+              color: colors.onSurfaceVariant,
+            ),
           ],
         ),
       ),

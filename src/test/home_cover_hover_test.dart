@@ -43,7 +43,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<AnimatedOpacity>(overlay).opacity, 1);
     expect(find.byIcon(Icons.waves_rounded), findsOneWidget);
-    expect(find.text('Волна по треку'), findsOneWidget);
+    expect(find.text('Волна по треку · двойной клик'), findsOneWidget);
+    await tester.tap(find.byType(HomeCoverWidget));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('Волна активирована'), findsNothing);
+    await tester.tap(find.byType(HomeCoverWidget));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byType(HomeCoverWidget));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Волна активирована'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
     await mouse.moveTo(Offset.zero);
     await tester.pumpAndSettle();
     expect(tester.widget<AnimatedOpacity>(overlay).opacity, 0);

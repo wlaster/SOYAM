@@ -346,9 +346,10 @@ class _AlbumViewState extends State<AlbumView> {
                           ),
                           durationMs: track.durationMs,
                           isLiked: track.isLiked,
-                          onTap: () => PlaybackController.playAlbumTrack(
-                            int.parse(albumData.id),
+                          onTap: () => PlaybackController.playTrackList(
+                            albumData.tracks,
                             track.id,
+                            collectionKey: 'album:${albumData.id}',
                           ),
                           onTitleTap: () =>
                               navigateTo(AppSection.album, albumData.id),

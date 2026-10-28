@@ -367,13 +367,13 @@ fn create_hbitmap_from_wic(bytes: &[u8], target_w: u32, target_h: u32) -> Option
             .ok()?;
         let frame = decoder.GetFrame(0).ok()?;
 
-        let size = target_w.min(target_h);
+        let size = target_w.min(target_h).saturating_sub(16).max(1);
         let radius = (size as f32 * 0.12) as i32;
         let r_f = radius as f32;
 
         let scaler = factory.CreateBitmapScaler().ok()?;
         scaler
-            .Initialize(&frame, size, size, WICBitmapInterpolationModeFant)
+            .Initialize(&frame, size, size, WICBitmapInterpolationModeHighQualityCubic)
             .ok()?;
 
         let converter = factory.CreateFormatConverter().ok()?;
