@@ -325,6 +325,7 @@ class _AlbumViewState extends State<AlbumView> {
                         final track = albumData.tracks[index];
                         return CommonTrackTile(
                           trackId: track.id,
+                          replaceLeadingWhenPlaying: true,
                           title: track.title,
                           version: track.version,
                           artists: track.artists,

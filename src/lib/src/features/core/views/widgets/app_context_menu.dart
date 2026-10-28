@@ -10,6 +10,8 @@ class AppContextMenuItem<T> {
   final Color? color;
   final List<AppContextMenuItem<T>>? subItems;
   final bool isSelected;
+  final bool searchable;
+  final bool pinned;
 
   const AppContextMenuItem({
     required this.label,
@@ -19,6 +21,8 @@ class AppContextMenuItem<T> {
     this.color,
     this.subItems,
     this.isSelected = false,
+    this.searchable = false,
+    this.pinned = false,
   });
 }
 
@@ -71,9 +75,20 @@ class AppContextMenu<T> extends StatelessWidget {
           ),
         ),
       ),
-      menuChildren: items.asMap().entries.map((entry) {
-        return _buildItem(context, entry.value, entry.key);
-      }).toList(),
+      menuChildren: [
+        Builder(
+          builder: (menuContext) => Column(
+            key: const ValueKey('context-menu-body'),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: items
+                .asMap()
+                .entries
+                .map((entry) => _buildItem(menuContext, entry.value, entry.key))
+                .toList(),
+          ),
+        ),
+      ],
       builder: (context, controller, child) {
         void toggle() =>
             controller.isOpen ? controller.close() : controller.open();
@@ -151,6 +166,7 @@ class AppContextMenu<T> extends StatelessWidget {
 
     if (item.subItems != null && item.subItems!.isNotEmpty) {
       return SubmenuButton(
+        clipBehavior: Clip.antiAlias,
         menuStyle: MenuStyle(
           backgroundColor: WidgetStateProperty.all(
             Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -168,11 +184,19 @@ class AppContextMenu<T> extends StatelessWidget {
             ),
           ),
         ),
-        menuChildren: item.subItems!
-            .asMap()
-            .entries
-            .map((entry) => _buildItem(context, entry.value, entry.key))
-            .toList(),
+        menuChildren: item.searchable
+            ? [
+                _SearchableSubmenu<T>(
+                  parentMenuContext: context,
+                  items: item.subItems!,
+                  itemBuilder: (item) => _buildItemContent(context, item, 0),
+                ),
+              ]
+            : item.subItems!
+                  .asMap()
+                  .entries
+                  .map((entry) => _buildItem(context, entry.value, entry.key))
+                  .toList(),
         leadingIcon: leading,
         child: Text(
           item.label,
@@ -185,6 +209,11 @@ class AppContextMenu<T> extends StatelessWidget {
     }
 
     return MenuItemButton(
+      style: ButtonStyle(
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
       onPressed: () {
         if (item.value != null) {
           onSelected(item.value as T);
@@ -204,6 +233,115 @@ class AppContextMenu<T> extends StatelessWidget {
           color: item.color ?? Theme.of(context).colorScheme.onSurface,
           fontSize: 14,
         ),
+      ),
+    );
+  }
+}
+
+class _SearchableSubmenu<T> extends StatefulWidget {
+  const _SearchableSubmenu({
+    required this.items,
+    required this.itemBuilder,
+    required this.parentMenuContext,
+  });
+  final BuildContext parentMenuContext;
+  final List<AppContextMenuItem<T>> items;
+  final Widget Function(AppContextMenuItem<T>) itemBuilder;
+  @override
+  State<_SearchableSubmenu<T>> createState() => _SearchableSubmenuState<T>();
+}
+
+class _SearchableSubmenuState<T> extends State<_SearchableSubmenu<T>> {
+  final _scroll = ScrollController();
+  String _query = '';
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.items
+        .where(
+          (item) =>
+              !item.pinned &&
+              item.label.toLowerCase().contains(_query.trim().toLowerCase()),
+        )
+        .toList();
+    final parent = widget.parentMenuContext.findRenderObject();
+    final height = parent is RenderBox && parent.hasSize
+        ? parent.size.height - 2
+        : MediaQuery.sizeOf(context).height * 0.65;
+    final desired =
+        64.0 +
+        widget.items.where((item) => item.pinned).length * 56 +
+        (filtered.isEmpty ? 48 : filtered.length * 52 + 4);
+    return SizedBox(
+      key: const ValueKey('playlist-submenu-body'),
+      width: 300,
+      height: desired.clamp(
+        120.0,
+        height.clamp(120.0, MediaQuery.sizeOf(context).height),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: TextField(
+              key: const ValueKey('playlist-menu-search'),
+              decoration: const InputDecoration(
+                hintText: 'Поиск плейлиста',
+                prefixIcon: Icon(Icons.search_rounded),
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+              ),
+              onChanged: (value) {
+                setState(() => _query = value);
+                if (_scroll.hasClients) _scroll.jumpTo(0);
+              },
+            ),
+          ),
+          Expanded(
+            child: filtered.isEmpty
+                ? const SizedBox(
+                    height: 48,
+                    child: Center(child: Text('Плейлисты не найдены')),
+                  )
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Scrollbar(
+                      controller: _scroll,
+                      thumbVisibility: true,
+                      child: ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(
+                          context,
+                        ).copyWith(scrollbars: false),
+                        child: ListView.separated(
+                          controller: _scroll,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 4,
+                          ),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 4),
+                          itemBuilder: (context, index) =>
+                              widget.itemBuilder(filtered[index]),
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+          for (final item in widget.items.where((item) => item.pinned))
+            Padding(
+              padding: const EdgeInsets.all(4),
+              child: widget.itemBuilder(item),
+            ),
+        ],
       ),
     );
   }

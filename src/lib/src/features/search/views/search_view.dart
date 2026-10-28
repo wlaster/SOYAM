@@ -12,7 +12,6 @@ import 'package:yayma/src/features/core/views/widgets/smooth_scroll.dart';
 import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
 import 'package:yayma/src/features/core/views/widgets/track_list.dart';
 import 'package:yayma/src/features/core/views/widgets/track_tile.dart';
-import 'package:yayma/src/features/library/views/add_to_playlist_dialog.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 import 'package:yayma/src/features/search/providers/search_provider.dart';
 import 'package:yayma/src/rust/api/models.dart';
@@ -270,16 +269,6 @@ class _TrackSearchTile extends StatelessWidget {
       leading: AppCover(coverUrl: track.coverUrl),
       durationMs: track.durationMs,
       isLiked: track.isLiked,
-      hoverActions: [
-        IconButton(
-          icon: Icon(
-            Icons.add_rounded,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          tooltip: 'Добавить в плейлист',
-          onPressed: () => AddToPlaylistDialog.show(context, track),
-        ),
-      ],
       onTap: () => PlaybackController.playTrack(track.id),
       onTitleTap: () {
         if (track.albumId != null) {

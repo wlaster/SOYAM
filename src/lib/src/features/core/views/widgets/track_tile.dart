@@ -21,6 +21,7 @@ class CommonTrackTile extends StatefulWidget {
   final String trackId;
   final int? durationMs;
   final bool isLiked;
+  final bool replaceLeadingWhenPlaying;
   final String title;
   final String? version;
   final List<TrackArtistDto> artists;
@@ -44,6 +45,7 @@ class CommonTrackTile extends StatefulWidget {
     super.key,
     this.durationMs,
     this.isLiked = false,
+    this.replaceLeadingWhenPlaying = false,
     this.version,
     this.leading,
     this.trailing,
@@ -168,6 +170,7 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                 items: [
                   AppContextMenuItem(
                     label: 'Добавить в плейлист',
+                    searchable: true,
                     icon: Icons.playlist_add_rounded,
                     subItems: [
                       ...playlists.map(
@@ -181,13 +184,14 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                               : AppCover(
                                   coverUrl: p.coverUrl,
                                   url: p.coverUrl,
-                                  size: 40,
+                                  size: 32,
                                 ),
                         ),
                       ),
                       const AppContextMenuItem(
                         value: 'create_playlist',
-                        label: 'Создать новый плейлист',
+                        pinned: true,
+                        label: 'Создать плейлист',
                         icon: Icons.add_rounded,
                       ),
                     ],
@@ -246,7 +250,7 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                 ],
                 child: IconButton(
                   icon: Icon(
-                    Icons.more_horiz_rounded,
+                    Icons.more_vert_rounded,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                   onPressed: null,
@@ -312,6 +316,7 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                     ),
                                     child: _LeadingPlayingBadge(
                                       trackId: widget.trackId,
+                                      replace: widget.replaceLeadingWhenPlaying,
                                       child: _adjustLeading(
                                         widget.leading!,
                                         isNarrow,
@@ -525,7 +530,7 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                       child: Platform.isAndroid
                                           ? IconButton(
                                               icon: const Icon(
-                                                Icons.more_horiz_rounded,
+                                                Icons.more_vert_rounded,
                                               ),
                                               tooltip: 'Действия',
                                               onPressed: _showTrackBottomSheet,
@@ -558,8 +563,13 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
 class _LeadingPlayingBadge extends StatelessWidget {
   final String trackId;
   final Widget child;
+  final bool replace;
 
-  const _LeadingPlayingBadge({required this.trackId, required this.child});
+  const _LeadingPlayingBadge({
+    required this.trackId,
+    required this.child,
+    this.replace = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -571,6 +581,24 @@ class _LeadingPlayingBadge extends StatelessWidget {
         if (!isCurrent) return child;
         final isPlaying = visibleSignal(context, isPlayingSignal);
         final scheme = Theme.of(context).colorScheme;
+        if (replace) {
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              Visibility(
+                visible: false,
+                maintainSize: true,
+                maintainState: true,
+                maintainAnimation: true,
+                child: child,
+              ),
+              TrackPlayingIndicator(
+                isPlaying: isPlaying,
+                color: scheme.primary,
+              ),
+            ],
+          );
+        }
         return Stack(
           clipBehavior: Clip.none,
           children: [

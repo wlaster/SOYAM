@@ -5,8 +5,54 @@ import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/track_tile.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 
+import 'player_controls_test.dart' as fixtures;
+
 void main() {
+  testWidgets('album playing status replaces the centered number', (
+    tester,
+  ) async {
+    playerStateSignal.value = fixtures.state(playing: true);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: CommonTrackTile(
+              trackId: '1',
+              title: 'Track',
+              artists: [],
+              replaceLeadingWhenPlaying: true,
+              durationMs: 60000,
+              leading: SizedBox(
+                key: ValueKey('number-slot'),
+                width: 32,
+                height: 48,
+                child: Center(child: Text('1')),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final hiddenNumber = tester.widget<Visibility>(
+      find
+          .ancestor(of: find.text('1'), matching: find.byType(Visibility))
+          .first,
+    );
+    expect(hiddenNumber.visible, isFalse);
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('number-slot'))).dy,
+      closeTo(tester.getCenter(find.text('1:00')).dy, 0.1),
+    );
+    playerStateSignal.value = null;
+    await tester.pumpAndSettle();
+    expect(
+      find.ancestor(of: find.text('1'), matching: find.byType(Visibility)),
+      findsNothing,
+    );
+  });
+
   tearDown(() {
+    playerStateSignal.value = null;
     trackLikeOverridesSignal.value = {};
     pendingTrackLikesSignal.value = {};
   });
