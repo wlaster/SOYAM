@@ -636,10 +636,8 @@ class _TrackTile extends StatelessWidget {
           ],
         ),
       ),
-      trailing: Text(
-        formatDuration(track.durationMs),
-        style: TextStyle(color: cs.onSurface.withValues(alpha: 0.38)),
-      ),
+      durationMs: track.durationMs,
+      isLiked: track.isLiked,
       hoverActions: [
         IconButton(
           icon: Icon(Icons.playlist_remove_rounded, color: cs.error),

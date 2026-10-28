@@ -7,6 +7,7 @@ import 'package:signals_flutter/signals_flutter.dart';
 import 'package:yayma/src/features/core/theme/app_tokens.dart';
 import 'package:yayma/src/features/core/views/widgets/app_context_menu.dart';
 import 'package:yayma/src/features/core/views/widgets/app_cover.dart';
+import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
 import 'package:yayma/src/features/core/views/widgets/track_context_actions.dart';
@@ -18,6 +19,8 @@ import 'package:yayma/src/rust/api/models.dart';
 
 class CommonTrackTile extends StatefulWidget {
   final String trackId;
+  final int? durationMs;
+  final bool isLiked;
   final String title;
   final String? version;
   final List<TrackArtistDto> artists;
@@ -39,6 +42,8 @@ class CommonTrackTile extends StatefulWidget {
     required this.title,
     required this.artists,
     super.key,
+    this.durationMs,
+    this.isLiked = false,
     this.version,
     this.leading,
     this.trailing,
@@ -288,6 +293,9 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 150),
                             padding: effectivePadding,
+                            constraints: BoxConstraints(
+                              minHeight: isNarrow ? 64 : 72,
+                            ),
                             decoration: BoxDecoration(
                               color: isMenuOpen
                                   ? Theme.of(context).colorScheme.onSurface
@@ -436,27 +444,96 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    if (Platform.isAndroid)
-                                      IconButton(
-                                        icon: Icon(
-                                          Icons.more_horiz_rounded,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
+                                    if (!Platform.isAndroid &&
+                                        widget.hoverActions != null)
+                                      SizedBox(
+                                        width:
+                                            40.0 * widget.hoverActions!.length,
+                                        child: showHighlighted
+                                            ? Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: widget.hoverActions!
+                                                    .map(
+                                                      (action) => SizedBox(
+                                                        width: 40,
+                                                        height: 40,
+                                                        child: action,
+                                                      ),
+                                                    )
+                                                    .toList(),
+                                              )
+                                            : null,
+                                      ),
+                                    SignalBuilder(
+                                      builder: (context) {
+                                        final id = widget.trackId
+                                            .split(':')
+                                            .first;
+                                        final liked =
+                                            visibleSignal(
+                                              context,
+                                              trackLikeOverridesSignal,
+                                            )[id] ??
+                                            widget.isLiked;
+                                        final pending = visibleSignal(
+                                          context,
+                                          pendingTrackLikesSignal,
+                                        ).contains(id);
+                                        return Tooltip(
+                                          message: liked
+                                              ? 'Убрать из любимых'
+                                              : 'В любимые',
+                                          child: AnimatedLikeButton(
+                                            key: ValueKey('track-like-$id'),
+                                            isLiked: liked,
+                                            size: 20,
+                                            showBackground: false,
+                                            onTap: () {
+                                              if (!pending) {
+                                                unawaited(
+                                                  PlaybackController.toggleLike(
+                                                    trackId: widget.trackId,
+                                                    isLiked: liked,
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
+                                    if (widget.durationMs != null)
+                                      SizedBox(
+                                        width: 48,
+                                        child: Text(
+                                          formatDuration(widget.durationMs!),
+                                          textAlign: TextAlign.end,
+                                          style: TextStyle(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurface
+                                                .withValues(alpha: 0.38),
+                                          ),
                                         ),
-                                        tooltip: 'Действия',
-                                        onPressed: _showTrackBottomSheet,
                                       )
-                                    else ...[
-                                      if (!showHighlighted &&
-                                          widget.trailing != null)
-                                        widget.trailing!,
-                                      if (showHighlighted) ...[
-                                        if (widget.hoverActions != null)
-                                          ...widget.hoverActions!,
-                                        buildContextMenu(),
-                                      ],
-                                    ],
+                                    else if (widget.trailing != null)
+                                      widget.trailing!,
+                                    const SizedBox(width: 8),
+                                    SizedBox(
+                                      width: 40,
+                                      child: Platform.isAndroid
+                                          ? IconButton(
+                                              icon: const Icon(
+                                                Icons.more_horiz_rounded,
+                                              ),
+                                              tooltip: 'Действия',
+                                              onPressed: _showTrackBottomSheet,
+                                            )
+                                          : showHighlighted
+                                          ? buildContextMenu()
+                                          : null,
+                                    ),
                                   ],
                                 ),
                               ],

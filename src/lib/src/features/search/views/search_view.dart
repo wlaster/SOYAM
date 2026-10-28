@@ -268,10 +268,8 @@ class _TrackSearchTile extends StatelessWidget {
       artists: track.artists,
       albumId: track.albumId,
       leading: AppCover(coverUrl: track.coverUrl),
-      trailing: Text(
-        formatDuration(track.durationMs),
-        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-      ),
+      durationMs: track.durationMs,
+      isLiked: track.isLiked,
       hoverActions: [
         IconButton(
           icon: Icon(

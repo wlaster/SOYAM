@@ -48,7 +48,7 @@ class _CompassButton extends StatelessWidget {
       maximumSize: const Size(40, 40),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     ),
-    icon: const Icon(Icons.explore, size: 26),
+    icon: const Icon(Icons.explore, size: 30),
   );
 }
 

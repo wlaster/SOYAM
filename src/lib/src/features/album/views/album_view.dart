@@ -332,6 +332,7 @@ class _AlbumViewState extends State<AlbumView> {
                           sheetCoverUrl: albumData.coverUrl,
                           leading: SizedBox(
                             width: 32,
+                            height: 48,
                             child: Center(
                               child: Text(
                                 '${index + 1}',
@@ -342,12 +343,8 @@ class _AlbumViewState extends State<AlbumView> {
                               ),
                             ),
                           ),
-                          trailing: Text(
-                            formatDuration(track.durationMs),
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.38),
-                            ),
-                          ),
+                          durationMs: track.durationMs,
+                          isLiked: track.isLiked,
                           onTap: () => PlaybackController.playAlbumTrack(
                             int.parse(albumData.id),
                             track.id,

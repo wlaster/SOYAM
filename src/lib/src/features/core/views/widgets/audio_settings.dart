@@ -695,28 +695,7 @@ class _EqualizerViewState extends State<_EqualizerView> {
             max: 12,
             enabled: enabled,
             decoration: M3ESliderDecoration(
-              colors: M3ESliderColors(
-                thumbColor: enabled
-                    ? accent
-                    : cs.onSurface.withValues(alpha: 0.38),
-                disabledThumbColor: cs.onSurface.withValues(alpha: 0.38),
-                activeTrackColor: accent.withValues(alpha: enabled ? 0.7 : 0.3),
-                inactiveTrackColor: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.12),
-                disabledActiveTrackColor: accent.withValues(alpha: 0.3),
-                disabledInactiveTrackColor: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.12),
-                activeTickColor: accent.withValues(alpha: 0.7),
-                inactiveTickColor: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.12),
-                disabledActiveTickColor: cs.onSurface.withValues(alpha: 0.38),
-                disabledInactiveTickColor: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.12),
-              ),
+              colors: _audioSliderColors(cs, accent, enabled),
               trackHeight: 4,
               thumbWidth: 8,
               thumbHeight: 14,
@@ -1009,30 +988,7 @@ class _EffectParamRow extends StatelessWidget {
                   : null,
               enabled: enabled,
               decoration: M3ESliderDecoration(
-                colors: M3ESliderColors(
-                  thumbColor: enabled
-                      ? accent
-                      : cs.onSurface.withValues(alpha: 0.38),
-                  disabledThumbColor: cs.onSurface.withValues(alpha: 0.38),
-                  activeTrackColor: accent.withValues(
-                    alpha: enabled ? 0.7 : 0.3,
-                  ),
-                  inactiveTrackColor: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.12),
-                  disabledActiveTrackColor: accent.withValues(alpha: 0.3),
-                  disabledInactiveTrackColor: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.12),
-                  activeTickColor: accent.withValues(alpha: 0.7),
-                  inactiveTickColor: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.12),
-                  disabledActiveTickColor: cs.onSurface.withValues(alpha: 0.38),
-                  disabledInactiveTickColor: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.12),
-                ),
+                colors: _audioSliderColors(cs, accent, enabled),
                 trackHeight: 4,
                 thumbWidth: 8,
                 thumbHeight: 16,
@@ -1079,4 +1035,21 @@ class EqualizerDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return const AudioSettingsDialog();
   }
+}
+
+M3ESliderColors _audioSliderColors(ColorScheme cs, Color accent, bool enabled) {
+  final muted = cs.onSurface.withValues(alpha: 0.38);
+  final track = cs.onSurface.withValues(alpha: 0.12);
+  return M3ESliderColors(
+    thumbColor: enabled ? accent : muted,
+    disabledThumbColor: muted,
+    activeTrackColor: accent.withValues(alpha: enabled ? 0.7 : 0.3),
+    inactiveTrackColor: track,
+    disabledActiveTrackColor: accent.withValues(alpha: 0.3),
+    disabledInactiveTrackColor: track,
+    activeTickColor: accent.withValues(alpha: 0.7),
+    inactiveTickColor: track,
+    disabledActiveTickColor: muted,
+    disabledInactiveTickColor: track,
+  );
 }

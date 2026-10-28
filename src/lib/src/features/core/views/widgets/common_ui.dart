@@ -1032,6 +1032,7 @@ class AnimatedLikeButton extends StatefulWidget {
   final bool isLiked;
   final double size;
   final Color? likedColor;
+  final bool showBackground;
   final VoidCallback? onTap;
 
   const AnimatedLikeButton({
@@ -1039,6 +1040,7 @@ class AnimatedLikeButton extends StatefulWidget {
     super.key,
     this.size = 22,
     this.likedColor,
+    this.showBackground = true,
     this.onTap,
   });
 
@@ -1095,8 +1097,14 @@ class _AnimatedLikeButtonState extends State<AnimatedLikeButton>
           // backdrop looks identical to neighbouring player buttons.
           borderRadius: BorderRadius.circular(14),
           // Match the M3 IconButton state layer, otherwise hover is invisible.
-          hoverColor: cs.onSurfaceVariant.withValues(alpha: 0.1),
-          highlightColor: cs.onSurfaceVariant.withValues(alpha: 0.1),
+          hoverColor: widget.showBackground
+              ? cs.onSurfaceVariant.withValues(alpha: 0.1)
+              : Colors.transparent,
+          highlightColor: widget.showBackground
+              ? cs.onSurfaceVariant.withValues(alpha: 0.1)
+              : Colors.transparent,
+          splashColor: widget.showBackground ? null : Colors.transparent,
+          focusColor: widget.showBackground ? null : Colors.transparent,
           child: SizedBox(
             width: math.max<double>(hexSize + 12, 40),
             height: math.max<double>(hexSize + 12, 40),

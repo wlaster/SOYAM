@@ -20,6 +20,12 @@ import 'package:yayma/src/rust/api/playback.dart' as rust;
 import 'package:yayma/src/rust/api/simple.dart' as rust;
 import 'package:yayma/src/rust/lib.dart';
 
+final FlutterSignal<Map<String, bool>> trackLikeOverridesSignal =
+    signal<Map<String, bool>>({});
+final FlutterSignal<Set<String>> pendingTrackLikesSignal = signal<Set<String>>(
+  {},
+);
+
 // Player state signals
 final FlutterSignal<PlaybackState?> playerStateSignal = signal<PlaybackState?>(
   null,
@@ -67,6 +73,8 @@ Future<void> disposePlayback() async {
 
   _bufferingDelayDebouncer.dispose();
 
+  trackLikeOverridesSignal.value = {};
+  pendingTrackLikesSignal.value = {};
   playerStateSignal.value = null;
   activeCollectionSignal.value = null;
   playerProgressSignal.value = null;
@@ -214,10 +222,12 @@ final FlutterComputed<RepeatModeDto> repeatModeSignal = computed(
 );
 
 // Signals for liking/disliking the current track
-final FlutterComputed<bool> isLikedSignal = computed(
-  () => playerStateSignal.value?.currentTrack?.isLiked ?? false,
-  options: const ComputedOptions(name: 'isLikedSignal'),
-);
+final FlutterComputed<bool> isLikedSignal = computed(() {
+  final track = playerStateSignal.value?.currentTrack;
+  return trackLikeOverridesSignal.value[track?.id.split(':').first] ??
+      track?.isLiked ??
+      false;
+}, options: const ComputedOptions(name: 'isLikedSignal'));
 
 final FlutterComputed<bool> isDislikedSignal = computed(
   () => playerStateSignal.value?.currentTrack?.isDisliked ?? false,
@@ -638,11 +648,15 @@ class PlaybackController {
   static Future<void> toggleRepeat() =>
       runRustAction((ctx) => rust.toggleRepeatMode(ctx: ctx));
   static Future<void> stop() => runRustAction((ctx) => rust.stop(ctx: ctx));
-  static Future<bool> toggleLike({required String trackId}) async {
+  static Future<bool> toggleLike({
+    required String trackId,
+    bool? isLiked,
+  }) async {
     // Optimistic list update (instant); the Rust stream reconciles after.
     // Unlike works by id; insertion needs the DTO: current queue first,
     // then the liked cache (re-like).
     final baseId = trackId.split(':').first;
+    if (pendingTrackLikesSignal.peek().contains(baseId)) return false;
     SimpleTrackDto? dto;
     try {
       final queue = queueTracksSignal.value.value ?? const <SimpleTrackDto>[];
@@ -653,17 +667,40 @@ class PlaybackController {
         }
       }
     } on Object catch (_) {}
+    final current = playerStateSignal.peek()?.currentTrack;
+    if (dto == null && current?.id.split(':').first == baseId) dto = current;
     dto ??= findLikedDto(baseId);
-    final applied = applyLikeOptimistic(trackId: trackId, track: dto);
-    final confirmed = await runRustAction(
-      (ctx) => rust.toggleLike(ctx: ctx, trackId: trackId),
+    final previous =
+        trackLikeOverridesSignal.peek()[baseId] ??
+        isLiked ??
+        dto?.isLiked ??
+        false;
+    trackLikeOverridesSignal.value = {
+      ...trackLikeOverridesSignal.peek(),
+      baseId: !previous,
+    };
+    pendingTrackLikesSignal.value = {...pendingTrackLikesSignal.peek(), baseId};
+    final applied = applyLikeOptimistic(
+      trackId: trackId,
+      track: dto,
+      liked: previous,
     );
-    // Rust rolled its state back; undo the optimistic list edit as well so
-    // both sides show the same (server) truth.
-    if (!confirmed) {
-      applyLikeOptimistic(trackId: trackId, track: dto, liked: !applied);
+    try {
+      final confirmed = await runRustAction(
+        (ctx) => rust.toggleLike(ctx: ctx, trackId: trackId),
+      );
+      if (!confirmed) {
+        trackLikeOverridesSignal.value = {
+          ...trackLikeOverridesSignal.peek(),
+          baseId: previous,
+        };
+        applyLikeOptimistic(trackId: trackId, track: dto, liked: !applied);
+      }
+      return confirmed;
+    } finally {
+      pendingTrackLikesSignal.value = {...pendingTrackLikesSignal.peek()}
+        ..remove(baseId);
     }
-    return confirmed;
   }
 
   static Future<void> toggleDislike({required String trackId}) =>

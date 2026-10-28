@@ -613,12 +613,8 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                               coverUrl: track.coverUrl,
                               size: isNarrow ? 52 : 72,
                             ),
-                            trailing: Text(
-                              formatDuration(track.durationMs),
-                              style: TextStyle(
-                                color: cs.onSurface.withValues(alpha: 0.38),
-                              ),
-                            ),
+                            durationMs: track.durationMs,
+                            isLiked: track.isLiked,
                             onTap: () => unawaited(
                               PlaybackController.playLikedTrack(track.id),
                             ),

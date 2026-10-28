@@ -319,12 +319,8 @@ class _ArtistViewState extends State<ArtistView> {
                     size: 48,
                     borderRadius: 4,
                   ),
-                  trailing: Text(
-                    formatDuration(track.durationMs),
-                    style: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.38),
-                    ),
-                  ),
+                  durationMs: track.durationMs,
+                  isLiked: track.isLiked,
                   onTap: () => PlaybackController.playTrack(track.id),
                   onTitleTap: () {
                     if (track.albumId != null) {

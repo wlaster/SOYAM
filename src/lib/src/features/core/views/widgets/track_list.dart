@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:material_ui/material_ui.dart';
 
 /// Rows own their interactions. An extra focusable segmented card can change
@@ -31,14 +32,12 @@ class AppTrackList extends StatelessWidget {
       physics: physics,
       itemCount: itemCount,
       padding: listPadding,
-      cacheExtent: cacheExtent,
+      scrollCacheExtent: cacheExtent == null
+          ? null
+          : ScrollCacheExtent.pixels(cacheExtent!),
       addAutomaticKeepAlives: addAutomaticKeepAlives,
-      itemBuilder: (context, index) => Padding(
-        padding: padding.add(
-          EdgeInsets.only(bottom: index + 1 < itemCount ? 3 : 0),
-        ),
-        child: itemBuilder(context, index),
-      ),
+      itemBuilder: (context, index) =>
+          _trackListItem(context, index, itemCount, padding, itemBuilder),
     ),
   );
 }
@@ -60,14 +59,21 @@ class AppSliverTrackList extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SliverList(
     delegate: SliverChildBuilderDelegate(
-      (context, index) => Padding(
-        padding: padding.add(
-          EdgeInsets.only(bottom: index + 1 < itemCount ? 3 : 0),
-        ),
-        child: itemBuilder(context, index),
-      ),
+      (context, index) =>
+          _trackListItem(context, index, itemCount, padding, itemBuilder),
       childCount: itemCount,
       addAutomaticKeepAlives: addAutomaticKeepAlives,
     ),
   );
 }
+
+Widget _trackListItem(
+  BuildContext context,
+  int index,
+  int count,
+  EdgeInsetsGeometry padding,
+  IndexedWidgetBuilder builder,
+) => Padding(
+  padding: padding.add(EdgeInsets.only(bottom: index + 1 < count ? 3 : 0)),
+  child: builder(context, index),
+);
