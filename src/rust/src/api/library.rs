@@ -158,14 +158,14 @@ pub async fn toggle_dislike(ctx: &AppContext, track_id: String) {
         ctx.audio.signals.changed.send_replace(());
     }
 
-    // Perform API request in background (with optimistic-UI rollback on error)
+    // Keep the optimistic update, but finish the request before callers refresh the server list.
     // HTTP needs the full "id:album" entity id; cache/Wave keep base id.
     let api = ctx.core.api.clone();
     let audio_tx = ctx.audio.tx.clone();
     let state = ctx.audio.state.clone();
     let signals = ctx.audio.signals.clone();
     let entity_id = resolve_like_entity_id(ctx, &track_id).await;
-    tokio::spawn(async move {
+    (async move {
         let api_result = if is_disliked {
             api.remove_dislike_track(entity_id.clone()).await
         } else {
@@ -196,7 +196,7 @@ pub async fn toggle_dislike(ctx: &AppContext, track_id: String) {
                 }
             }
         }
-    });
+    }).await;
 }
 
 pub async fn upload_user_track(
@@ -979,9 +979,12 @@ pub async fn liked_tracks_stream(
     }
 }
 
-pub async fn get_disliked_tracks(ctx: &AppContext) -> Vec<SimpleTrackDto> {
-    let (_, disliked) = ctx.audio.state.read().await.liked.snapshot();
-    let mut ids: Vec<_> = disliked.into_iter().collect();
-    ids.sort();
-    build_track_dtos(ctx, ids).await
+pub async fn get_disliked_tracks(ctx: &AppContext) -> Result<Vec<SimpleTrackDto>, String> {
+    let ids = ctx.core.api.fetch_disliked_ids().await.map_err(|e| e.to_string())?;
+    ctx.audio.state.write().await.liked.replace_disliked_ids(&ids);
+    let mut tracks = build_track_dtos(ctx, ids).await;
+    for track in &mut tracks {
+        track.is_disliked = true;
+    }
+    Ok(tracks)
 }

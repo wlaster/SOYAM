@@ -983,6 +983,12 @@ impl ApiService {
         ))
     }
 
+    pub async fn fetch_disliked_ids(&self) -> Result<Vec<String>> {
+        let opts = yandex_music::api::track::get_disliked_tracks::GetDislikedTracksOptions::new(self.user_id);
+        let library = self.client.get_disliked_tracks(&opts).await?;
+        Ok(library.tracks.into_iter().map(|track| track.id).collect())
+    }
+
     pub async fn fetch_liked_ids(&self) -> Result<Vec<String>> {
         let opts =
             yandex_music::api::track::get_liked_tracks::GetLikedTracksOptions::new(self.user_id);
@@ -1046,7 +1052,7 @@ impl ApiService {
         Ok(LikedTracksSync::Changed {
             revision,
             liked_track_ids: parse_ids("liked"),
-            disliked_track_ids: parse_ids("disliked"),
+            disliked_track_ids: self.fetch_disliked_ids().await?,
         })
     }
 }
@@ -1259,5 +1265,26 @@ mod popular_high_quality_diagnostics {
         std::fs::write(report_path, serde_json::to_string_pretty(&report).unwrap()).unwrap();
         assert!(successful > 0, "No actual production stream request succeeded");
         println!("Production High test: {successful}/8 successful stream URLs");
+    }
+}
+
+#[cfg(test)]
+mod server_dislikes_live_tests {
+    #[tokio::test]
+    #[ignore = "requires SOYAM_LIVE_TOKEN, SOYAM_LIVE_UID and network"]
+    async fn server_dislikes_live() {
+        let token = std::env::var("SOYAM_LIVE_TOKEN").expect("live token required");
+        let uid = std::env::var("SOYAM_LIVE_UID").unwrap().parse().unwrap();
+        let api = super::ApiService::new(token, Some(uid)).await.unwrap();
+        let ids = api.fetch_disliked_ids().await.expect("server dislike list");
+        let mut metadata = std::collections::HashSet::new();
+        for chunk in ids.chunks(50) {
+            for track in api.fetch_tracks(chunk.to_vec()).await.expect("track metadata") {
+                metadata.insert(track.id);
+            }
+        }
+        assert!(!ids.is_empty());
+        assert!(ids.iter().all(|id| metadata.contains(id)));
+        println!("Server dislikes: {}; tracks with metadata: {}", ids.len(), metadata.len());
     }
 }

@@ -61,6 +61,10 @@ impl LikedCache {
         }
     }
 
+    pub fn replace_disliked_ids(&mut self, ids: &[String]) {
+        self.disliked_ids = ids.iter().map(|id| id.to_base_id().to_string()).collect();
+    }
+
     pub fn set_dislike_status(&mut self, track_id: &str, disliked: bool) {
         let base_id = track_id.to_base_id().to_string();
         if disliked {
@@ -130,5 +134,23 @@ impl LikedCache {
 
     pub fn is_disliked(&self, track_id: &str) -> bool {
         self.disliked_ids.contains(track_id.to_base_id())
+    }
+}
+
+#[cfg(test)]
+mod server_dislikes_tests {
+    use super::LikedCache;
+    #[test]
+    fn server_snapshot_replaces_stale_ids_and_preserves_likes() {
+        let mut cache = LikedCache::default();
+        cache.set_liked_ids(vec!["liked".into()]);
+        cache.set_dislike_status("stale", true);
+        cache.replace_disliked_ids(&["server:album".into(), "other".into()]);
+        assert!(cache.is_disliked("server"));
+        assert!(cache.is_disliked("other"));
+        assert!(!cache.is_disliked("stale"));
+        assert!(cache.is_liked("liked"));
+        cache.replace_disliked_ids(&[]);
+        assert!(!cache.is_disliked("server"));
     }
 }

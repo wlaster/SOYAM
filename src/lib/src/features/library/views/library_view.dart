@@ -1148,6 +1148,17 @@ class _DislikedTracksTab extends StatelessWidget {
   Widget build(BuildContext context) => SignalBuilder(
     builder: (context) {
       final tracks = dislikedTracksSignal.value;
+      if (dislikedTracksLoadingSignal.value && tracks.isEmpty) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (dislikedTracksErrorSignal.value && tracks.isEmpty) {
+        return const Center(
+          child: TextButton(
+            onPressed: refreshDislikedTracks,
+            child: Text('Не удалось загрузить дизлайки. Повторить'),
+          ),
+        );
+      }
       if (tracks.isEmpty) {
         return const Center(child: Text('Нет треков с дизлайком'));
       }

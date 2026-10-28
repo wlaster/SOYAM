@@ -423,9 +423,7 @@ class _SettingsViewState extends State<SettingsView> {
                       'Не удалось сохранить «Меньше ИИ». Проверьте подключение и повторите.',
                     ),
                   ),
-                  const SizedBox(height: 32),
-                  const _SectionTitle(title: 'Возрастные ограничения'),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 8),
                   SignalBuilder(
                     builder: (context) {
                       final enabled = _adultContentSignal.value.value ?? true;
