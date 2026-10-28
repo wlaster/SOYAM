@@ -334,14 +334,23 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                       Row(
                                         children: [
                                           Flexible(
-                                            child: Text(
-                                              widget.title,
-                                              style: trackTitleStyle(
-                                                context,
-                                                weight: FontWeight.bold,
+                                            child: MouseRegion(
+                                              cursor: widget.onTitleTap != null
+                                                  ? SystemMouseCursors.click
+                                                  : SystemMouseCursors.basic,
+                                              child: GestureDetector(
+                                                behavior: HitTestBehavior.opaque,
+                                                onTap: widget.onTitleTap,
+                                                child: Text(
+                                                  widget.title,
+                                                  style: trackTitleStyle(
+                                                    context,
+                                                    weight: FontWeight.bold,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
                                               ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                           SignalBuilder(

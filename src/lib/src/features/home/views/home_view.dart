@@ -255,8 +255,7 @@ class _HomeTrackHeaderState extends State<_HomeTrackHeader> {
                 mainAxisAlignment: widget.isNarrow
                     ? MainAxisAlignment.start
                     : MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Flexible(
                     flex: 3,
