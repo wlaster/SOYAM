@@ -26,6 +26,7 @@ PlaybackState state({
     durationMs: 1000,
     isLiked: false,
     isDisliked: false,
+    isExplicit: false,
   ),
 );
 

@@ -26,6 +26,7 @@ pub struct TrackMetadata {
     pub album_id: Option<String>,
     pub cover_url: Option<String>,
     pub duration_ms: u64,
+    pub is_explicit: Option<bool>,
 }
 
 const CREATE_APP_SETTINGS: &str = "CREATE TABLE IF NOT EXISTS app_settings (
@@ -54,7 +55,8 @@ const CREATE_TRACK_METADATA: &str = "CREATE TABLE IF NOT EXISTS track_metadata (
     album TEXT,
     album_id TEXT,
     cover_url TEXT,
-    duration_ms INTEGER NOT NULL
+    duration_ms INTEGER NOT NULL,
+    is_explicit INTEGER
 )";
 
 const CREATE_TRACK_ARTISTS: &str = "CREATE TABLE IF NOT EXISTS track_metadata_artists (
@@ -113,6 +115,12 @@ impl AppDatabase {
                 CREATE_TRACK_ARTISTS,
             ] {
                 conn.execute(m, [])?;
+            }
+            let has_explicit = conn.prepare("PRAGMA table_info(track_metadata)")?
+                .query_map([], |row| row.get::<_, String>(1))?
+                .collect::<Result<Vec<_>, _>>()?.iter().any(|name| name == "is_explicit");
+            if !has_explicit {
+                conn.execute("ALTER TABLE track_metadata ADD COLUMN is_explicit INTEGER", [])?;
             }
             for idx in CREATE_INDEXES {
                 conn.execute(idx, [])?;
@@ -422,15 +430,16 @@ impl AppDatabase {
     pub async fn upsert_track_metadata(&mut self, metadata: TrackMetadata) -> DbResult<()> {
         let tx = self.conn.transaction()?;
         tx.execute(
-            "INSERT INTO track_metadata (track_id, title, version, album, album_id, cover_url, duration_ms)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO track_metadata (track_id, title, version, album, album_id, cover_url, duration_ms, is_explicit)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(track_id) DO UPDATE SET
              title = excluded.title,
              version = excluded.version,
              album = excluded.album,
              album_id = excluded.album_id,
              cover_url = excluded.cover_url,
-             duration_ms = excluded.duration_ms",
+             duration_ms = excluded.duration_ms,
+             is_explicit = excluded.is_explicit",
             params![
                 metadata.id,
                 metadata.title,
@@ -438,7 +447,8 @@ impl AppDatabase {
                 metadata.album,
                 metadata.album_id,
                 metadata.cover_url,
-                metadata.duration_ms as i64
+                metadata.duration_ms as i64,
+                metadata.is_explicit
             ],
         )?;
         tx.execute(
@@ -473,7 +483,7 @@ impl AppDatabase {
             for chunk in track_ids.chunks(900) {
                 let placeholders = chunk.iter().map(|_| "?").collect::<Vec<_>>().join(",");
                 let query = format!(
-                    "SELECT track_id, title, version, album, album_id, cover_url, duration_ms
+                    "SELECT track_id, title, version, album, album_id, cover_url, duration_ms, is_explicit
                  FROM track_metadata WHERE track_id IN ({})",
                     placeholders
                 );
@@ -488,6 +498,7 @@ impl AppDatabase {
                         album_id: row.get(4)?,
                         cover_url: row.get(5)?,
                         duration_ms: row.get::<_, i64>(6)? as u64,
+                        is_explicit: row.get(7)?,
                     })
                 })?;
                 for t in rows {
@@ -613,5 +624,31 @@ impl AppDatabase {
                 |r| r.get(0),
             )
             .optional()?)
+    }
+}
+
+#[cfg(test)]
+mod explicit_cache_hotfix_tests {
+    use super::*;
+    #[tokio::test(flavor = "multi_thread")]
+    async fn old_cache_migrates_and_explicit_flag_survives_reopening() {
+        let path = std::env::temp_dir().join(format!("soyam-explicit-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&path).unwrap();
+        let conn = Connection::open(path.join("yamusic_v2.db")).unwrap();
+        conn.execute("CREATE TABLE track_metadata (track_id TEXT PRIMARY KEY, title TEXT NOT NULL, version TEXT, album TEXT, album_id TEXT, cover_url TEXT, duration_ms INTEGER NOT NULL)", []).unwrap();
+        conn.execute("INSERT INTO track_metadata(track_id,title,duration_ms) VALUES ('11','Old',1000)", []).unwrap();
+        drop(conn);
+        let mut db = AppDatabase::init(Some(path.clone())).await.unwrap();
+        let mut metadata = db.get_track_metadata(&["11".into()]).await.unwrap().remove(0);
+        assert_eq!(metadata.is_explicit, None);
+        metadata.is_explicit = Some(true);
+        db.upsert_track_metadata(metadata).await.unwrap();
+        drop(db);
+        let mut db = AppDatabase::init(Some(path.clone())).await.unwrap();
+        let rows = db.get_track_metadata(&["11".into()]).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].is_explicit, Some(true));
+        drop(db);
+        std::fs::remove_dir_all(path).unwrap();
     }
 }

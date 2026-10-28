@@ -265,6 +265,7 @@ class _TrackSearchTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return CommonTrackTile(
       trackId: track.id,
+      isExplicit: track.isExplicit,
       title: track.title,
       version: track.version,
       artists: track.artists,

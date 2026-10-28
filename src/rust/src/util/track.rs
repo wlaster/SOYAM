@@ -44,7 +44,11 @@ pub fn track_from_metadata(m: &crate::storage::db::TrackMetadata) -> Track {
         title: Some(m.title.clone()),
         available: Some(true),
         artists,
-        albums: Vec::new(),
+        albums: if m.album_id.is_some() || m.album.is_some() {
+            serde_json::from_value(serde_json::json!({
+                "id": m.album_id, "title": m.album, "coverUri": m.cover_url,
+            })).ok().into_iter().collect()
+        } else { Vec::new() },
         available_for_premium_users: None,
         lyrics_available: None,
         best: None,
@@ -69,7 +73,7 @@ pub fn track_from_metadata(m: &crate::storage::db::TrackMetadata) -> Track {
         regions: Vec::new(),
         available_as_rbt: None,
         content_warning: None,
-        explicit: None,
+        explicit: m.is_explicit,
         preview_duration: None,
         available_full_without_permission: None,
         version: m.version.clone(),
@@ -228,5 +232,29 @@ mod like_entity_id_tests {
         assert_eq!(like_entity_id("123:456", Some("456")), "123:456");
         assert_eq!(like_entity_id("123:456", Some("789")), "123:456");
         assert_eq!(like_entity_id("123:456", None), "123:456");
+    }
+}
+
+/// Resolve mixed base/composite Yandex ids without changing visible list order.
+pub(crate) fn ordered_playback_tracks(
+    ids: &[String], selected: &str, fetched: &std::collections::HashMap<String, Track>,
+) -> Result<(im::Vector<Track>, usize), String> {
+    let tracks: im::Vector<_> = ids.iter().filter_map(|id| fetched.get(id.to_base_id()).cloned()).collect();
+    let index = tracks.iter().position(|track| track.id.to_base_id() == selected.to_base_id())
+        .ok_or_else(|| "Selected track unavailable".to_string())?;
+    Ok((tracks, index))
+}
+
+#[cfg(test)]
+mod list_playback_hotfix_tests {
+    use super::*;
+    #[test]
+    fn resolves_album_ids_preserves_order_and_previous_tracks() {
+        let tracks: Vec<Track> = ["11", "22", "33"].into_iter().map(|id| serde_json::from_value(serde_json::json!({"id":id,"realId":id,"title":id})).unwrap()).collect();
+        let fetched = tracks.into_iter().map(|t| (t.id.clone(), t)).collect();
+        let (ordered, index) = ordered_playback_tracks(&["11:9".into(),"22:8".into(),"33".into()], "22:7", &fetched).unwrap();
+        assert_eq!(index, 1);
+        assert_eq!(ordered.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), vec!["11","22","33"]);
+        assert!(ordered_playback_tracks(&["11".into()], "missing", &fetched).is_err());
     }
 }

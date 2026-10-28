@@ -75,7 +75,8 @@ pub(crate) fn stash_foreign_tables(conn: &Connection) {
         let info = table_info(conn, table);
         let cols = col_names(&info);
         let pk = pk_cols(&info);
-        let same_cols = cols.len() == expected_cols.len() && has_all(&cols, expected_cols);
+        let extra_explicit = *table == "track_metadata" && cols.contains(&"is_explicit");
+        let same_cols = cols.len() == expected_cols.len() + usize::from(extra_explicit) && has_all(&cols, expected_cols);
         if same_cols && pk == *expected_pk {
             continue; // ours (or fully identical) — keep as is.
         }

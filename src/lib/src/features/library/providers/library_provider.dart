@@ -488,6 +488,7 @@ bool applyLikeOptimistic({
     coverUrl: dto.coverUrl,
     isLiked: true,
     isDisliked: dto.isDisliked,
+    isExplicit: dto.isExplicit,
   );
   if (_likedAccumIds.add(baseId)) _likedAccum.insert(0, normalized);
   _likedFullCache.insert(0, normalized);

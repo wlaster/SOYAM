@@ -514,27 +514,25 @@ impl AudioSystem {
                 let stream_manager = self.queue.stream_manager.clone();
                 let current_generation = self.context_generation.clone();
                 self.spawn_fetch_context(generation, move || async move {
+                    use crate::util::track::CleanId;
+                    let ids: Vec<String> = ids.iter().map(|id| id.to_base_id().to_owned()).collect();
+                    let selected = selected.to_base_id().to_owned();
                     let offline = stream_manager.is_track_offline(&selected).await;
-                    let mut fetched = std::collections::HashMap::new();
-                    for chunk in ids.chunks(50) {
+                    let metadata = db.lock().await.get_track_metadata(&ids).await.map_err(|e| e.to_string())?;
+                    let mut fetched: std::collections::HashMap<String, Track> = metadata.iter()
+                        .map(|entry| (entry.id.to_base_id().to_owned(), crate::util::track::track_from_metadata(entry))).collect();
+                    let missing: Vec<_> = ids.iter().filter(|id| !fetched.contains_key(*id)).cloned().collect();
+                    for chunk in missing.chunks(50) {
                         if current_generation.load(Ordering::Acquire) != generation {
                             return Err("Cancelled".to_string());
                         }
                         if !offline {
                             if let Ok(tracks) = api.fetch_tracks(chunk.to_vec()).await {
-                                for track in tracks { fetched.insert(track.id.clone(), track); }
-                                continue;
+                                for track in tracks { fetched.insert(track.id.to_base_id().to_owned(), track); }
                             }
                         }
-                        let metadata = db.lock().await.get_track_metadata(chunk).await.map_err(|e| e.to_string())?;
-                        for entry in metadata {
-                            let track = crate::util::track::track_from_metadata(&entry);
-                            fetched.insert(track.id.clone(), track);
-                        }
                     }
-                    let tracks: im::Vector<_> = ids.iter().filter_map(|id| fetched.remove(id)).collect();
-                    let index = tracks.iter().position(|track| track.id == selected)
-                        .ok_or_else(|| "Selected track unavailable".to_string())?;
+                    let (tracks, index) = crate::util::track::ordered_playback_tracks(&ids, &selected, &fetched)?;
                     Ok((crate::audio::queue::PlaybackContext::Standalone, tracks, index))
                 });
             }

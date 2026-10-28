@@ -150,6 +150,8 @@ pub struct SimpleTrackDto {
     pub cover_url: Option<String>,
     pub is_liked: bool,
     pub is_disliked: bool,
+    #[serde(default)]
+    pub is_explicit: bool,
 }
 
 #[flutter_rust_bridge::frb(ignore)]
@@ -177,6 +179,7 @@ impl SimpleTrackDto {
             cover_url: format_cover(get_any_cover(t), COVER_SIZE_MEDIUM),
             is_liked: liked_ids.contains(track_id_base),
             is_disliked: disliked_ids.contains(track_id_base),
+            is_explicit: crate::app::settings::is_adult_track(t),
         }
     }
 
@@ -185,6 +188,7 @@ impl SimpleTrackDto {
         liked_ids: &std::collections::HashSet<String, S>,
         disliked_ids: &std::collections::HashSet<String, S>,
     ) -> Self {
+        let is_explicit = crate::app::settings::is_adult_track(&t);
         let is_liked = liked_ids.contains(t.id.to_base_id());
         let is_disliked = disliked_ids.contains(t.id.to_base_id());
         let cover_url = format_cover(get_any_cover(&t), COVER_SIZE_MEDIUM);
@@ -212,6 +216,7 @@ impl SimpleTrackDto {
             cover_url,
             is_liked,
             is_disliked,
+            is_explicit,
         }
     }
 }

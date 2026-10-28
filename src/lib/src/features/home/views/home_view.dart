@@ -303,6 +303,7 @@ class _HomeTrackHeaderState extends State<_HomeTrackHeader> {
                       ),
                     ),
                   ),
+                  if (meta.isExplicit) const ExplicitTrackBadge(),
                   if (meta.version != null)
                     Flexible(
                       child: Tooltip(

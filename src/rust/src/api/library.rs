@@ -627,6 +627,7 @@ pub async fn move_track_in_playlist(
 fn yandex_track_to_metadata(
     mut t: yandex_music::model::track::Track,
 ) -> crate::storage::db::TrackMetadata {
+    let is_explicit = Some(crate::app::settings::is_adult_track(&t));
     let artists: Vec<crate::api::models::TrackArtistDto> = t
         .artists
         .iter()
@@ -650,6 +651,7 @@ fn yandex_track_to_metadata(
         album_id,
         cover_url,
         duration_ms,
+        is_explicit,
     }
 }
 
@@ -704,6 +706,7 @@ fn metadata_to_dto(
         duration_ms: m.duration_ms as u32,
         is_liked,
         is_disliked,
+        is_explicit: m.is_explicit.unwrap_or(false),
     }
 }
 
@@ -754,7 +757,7 @@ pub(crate) async fn build_track_dtos(
         .iter()
         .filter(|id| match metadata_map.get(*id) {
             None => true,
-            Some(m) => m.artists.is_empty() || m.artists.iter().any(|a| a.id.is_empty()),
+            Some(m) => m.is_explicit.is_none() || m.artists.is_empty() || m.artists.iter().any(|a| a.id.is_empty()),
         })
         .cloned()
         .collect();
@@ -987,4 +990,25 @@ pub async fn get_disliked_tracks(ctx: &AppContext) -> Result<Vec<SimpleTrackDto>
         track.is_disliked = true;
     }
     Ok(tracks)
+}
+
+#[cfg(test)]
+mod explicit_hotfix_tests {
+    use super::*;
+    #[test]
+    fn yandex_explicit_flag_survives_dto_and_metadata_paths() {
+        for flag in [false, true] {
+            let track: yandex_music::model::track::Track = serde_json::from_value(serde_json::json!({"id":"11", "realId":"11", "title":"Test", "explicit":flag, "albums":[{"id":99,"title":"Album"}]})).unwrap();
+            let empty = std::collections::HashSet::<String>::new();
+            assert_eq!(SimpleTrackDto::from_yandex(&track, &empty, &empty).is_explicit, flag);
+            assert_eq!(SimpleTrackDto::from_yandex_owned(track.clone(), &empty, &empty).is_explicit, flag);
+            let metadata = yandex_track_to_metadata(track);
+            assert_eq!(metadata.is_explicit, Some(flag));
+            let restored = crate::util::track::track_from_metadata(&metadata);
+            assert_eq!(restored.albums[0].id, Some(99));
+            assert_eq!(restored.albums[0].title.as_deref(), Some("Album"));
+            assert_eq!(crate::util::track::track_from_metadata(&metadata).explicit, Some(flag));
+            assert_eq!(metadata_to_dto(metadata, false, false).is_explicit, flag);
+        }
+    }
 }

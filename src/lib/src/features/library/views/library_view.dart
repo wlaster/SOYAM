@@ -607,6 +607,7 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                           final track = tracks[index];
                           return CommonTrackTile(
                             trackId: track.id,
+                            isExplicit: track.isExplicit,
                             title: track.title,
                             version: track.version,
                             artists: track.artists,
@@ -1169,6 +1170,7 @@ class _DislikedTracksTab extends StatelessWidget {
           final track = tracks[index];
           return CommonTrackTile(
             trackId: track.id,
+            isExplicit: track.isExplicit,
             title: track.title,
             version: track.version,
             artists: track.artists,

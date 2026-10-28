@@ -310,6 +310,7 @@ class _ArtistViewState extends State<ArtistView> {
                 final track = tracks[index];
                 return CommonTrackTile(
                   trackId: track.id,
+                  isExplicit: track.isExplicit,
                   title: track.title,
                   version: track.version,
                   artists: track.artists,

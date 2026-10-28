@@ -21,6 +21,7 @@ class CommonTrackTile extends StatefulWidget {
   final String trackId;
   final int? durationMs;
   final bool isLiked;
+  final bool isExplicit;
   final bool replaceLeadingWhenPlaying;
   final String title;
   final String? version;
@@ -45,6 +46,7 @@ class CommonTrackTile extends StatefulWidget {
     super.key,
     this.durationMs,
     this.isLiked = false,
+    this.isExplicit = false,
     this.replaceLeadingWhenPlaying = false,
     this.version,
     this.leading,
@@ -65,14 +67,12 @@ class CommonTrackTile extends StatefulWidget {
 class _CommonTrackTileState extends State<CommonTrackTile> {
   final ValueNotifier<bool> _isHovered = ValueNotifier(false);
   final ValueNotifier<bool> _isPressed = ValueNotifier(false);
-  final ValueNotifier<bool> _isTitleHovered = ValueNotifier(false);
   final ValueNotifier<bool> _isMenuOpen = ValueNotifier(false);
 
   @override
   void dispose() {
     _isHovered.dispose();
     _isPressed.dispose();
-    _isTitleHovered.dispose();
     _isMenuOpen.dispose();
     super.dispose();
   }
@@ -334,56 +334,14 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                       Row(
                                         children: [
                                           Flexible(
-                                            child: MouseRegion(
-                                              onEnter: (_) =>
-                                                  _isTitleHovered.value = true,
-                                              onExit: (_) =>
-                                                  _isTitleHovered.value = false,
-                                              cursor: widget.onTitleTap != null
-                                                  ? SystemMouseCursors.click
-                                                  : SystemMouseCursors.basic,
-                                              child: GestureDetector(
-                                                behavior:
-                                                    HitTestBehavior.opaque,
-                                                onTap: widget.onTitleTap,
-                                                child: SignalBuilder(
-                                                  builder: (context) {
-                                                    return ValueListenableBuilder<
-                                                      bool
-                                                    >(
-                                                      valueListenable:
-                                                          _isTitleHovered,
-                                                      builder:
-                                                          (
-                                                            context,
-                                                            isTitleHovered,
-                                                            child,
-                                                          ) {
-                                                            return Text(
-                                                              widget.title,
-                                                              style: trackTitleStyle(
-                                                                context,
-                                                                weight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                                decoration:
-                                                                    isTitleHovered &&
-                                                                        widget.onTitleTap !=
-                                                                            null
-                                                                    ? TextDecoration
-                                                                          .underline
-                                                                    : null,
-                                                              ),
-                                                              maxLines: 1,
-                                                              overflow:
-                                                                  TextOverflow
-                                                                      .ellipsis,
-                                                            );
-                                                          },
-                                                    );
-                                                  },
-                                                ),
+                                            child: Text(
+                                              widget.title,
+                                              style: trackTitleStyle(
+                                                context,
+                                                weight: FontWeight.bold,
                                               ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                           SignalBuilder(
@@ -429,6 +387,8 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                               );
                                             },
                                           ),
+                                          if (widget.isExplicit)
+                                            const ExplicitTrackBadge(),
                                           TrackVersionWidget(
                                             version: widget.version,
                                             fontSize: isNarrow ? 12 : 14,

@@ -629,6 +629,7 @@ class _TrackTile extends StatelessWidget {
         : dragIndicator;
     return CommonTrackTile(
       trackId: track.id,
+      isExplicit: track.isExplicit,
       title: track.title,
       version: track.version,
       artists: track.artists,
