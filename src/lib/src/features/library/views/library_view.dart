@@ -419,7 +419,6 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                 16,
               ),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
                     child: TextField(
@@ -428,8 +427,8 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                       style: TextStyle(color: cs.onSurface, fontSize: 16),
                       decoration: InputDecoration(
                         constraints: const BoxConstraints(
-                          minHeight: 56,
-                          maxHeight: 56,
+                          minHeight: 48,
+                          maxHeight: 48,
                         ),
                         hintText: 'Поиск в любимых треках...',
                         hintStyle: TextStyle(
@@ -462,7 +461,7 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
-                          vertical: 16,
+                          vertical: 12,
                         ),
                       ),
                     ),

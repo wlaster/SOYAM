@@ -250,14 +250,31 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                       icon: Icons.remove_circle_outline_rounded,
                     ),
                 ],
-                child: IconButton(
-                  icon: Icon(
-                    Icons.more_vert_rounded,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                triggerBuilder: (toggle) => Tooltip(
+                  message: 'Действия',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: toggle,
+                      borderRadius: BorderRadius.circular(14),
+                      hoverColor: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.1),
+                      highlightColor: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.1),
+                      child: SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: Icon(
+                          Icons.more_vert_rounded,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
                   ),
-                  onPressed: null,
-                  tooltip: 'Действия',
                 ),
+                child: const SizedBox.shrink(),
               );
             },
           );
@@ -482,7 +499,6 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                             key: ValueKey('track-like-$id'),
                                             isLiked: liked,
                                             size: 20,
-                                            showBackground: true,
                                             onTap: () {
                                               if (!pending) {
                                                 unawaited(
