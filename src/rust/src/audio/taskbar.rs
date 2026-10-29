@@ -28,7 +28,7 @@ use windows::{
 struct ComSend<T>(T);
 unsafe impl<T> Send for ComSend<T> {}
 
-const BUTTON_COUNT: usize = 7;
+const BUTTON_COUNT: usize = 5;
 const FIRST_BUTTON_ID: u32 = 40001;
 const DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
 
@@ -156,8 +156,6 @@ pub(crate) fn handle_window_message(hwnd: HWND, msg: u32, wparam: WPARAM, lparam
 
 async fn send_update(ctx: &AppContext) {
     let is_playing = ctx.audio.signals.is_playing.get();
-    let is_shuffled = ctx.audio.signals.is_shuffled.get();
-    let repeat_mode = ctx.audio.signals.repeat_mode.get();
     let track_id = ctx.audio.signals.current_track_id.get();
     let track = ctx.audio.signals.current_track.get();
     let (liked_ids, disliked_ids) = ctx.audio.state.read().await.liked.snapshot();
@@ -173,14 +171,13 @@ async fn send_update(ctx: &AppContext) {
 
     // Redundant-update gate, same as the Dart effect it replaces.
     {
-        static LAST: Mutex<[u64; 5]> = Mutex::new([u64::MAX; 5]);
+        static LAST: Mutex<[u64; 4]> = Mutex::new([u64::MAX; 4]);
         let mut last = LAST.lock();
-        let sig: [u64; 5] = [
+        let sig: [u64; 4] = [
             track_id.as_deref().map(cover::hash_str).unwrap_or(0),
             is_playing as u64,
             liked as u64,
             disliked as u64,
-            is_shuffled as u64 * 2 + repeat_mode as u64,
         ];
         if *last == sig {
             return;
@@ -190,14 +187,6 @@ async fn send_update(ctx: &AppContext) {
 
     let icon = |name: &str| format!("assets/icons/{name}.ico");
     let buttons = vec![
-        ButtonSpec {
-            icon: icon(if is_shuffled { "shuffle_on" } else { "shuffle" }),
-            tooltip: if is_shuffled {
-                "Выключить перемешивание".into()
-            } else {
-                "Включить перемешивание".into()
-            },
-        },
         ButtonSpec {
             icon: icon(if disliked { "disliked" } else { "dislike" }),
             tooltip: if disliked {
@@ -232,14 +221,6 @@ async fn send_update(ctx: &AppContext) {
                 "Лайк"
             }
             .into(),
-        },
-        ButtonSpec {
-            icon: icon(match repeat_mode {
-                crate::audio::enums::RepeatMode::Single => "repeat_one",
-                crate::audio::enums::RepeatMode::All => "repeat_on",
-                crate::audio::enums::RepeatMode::None => "repeat",
-            }),
-            tooltip: "Повтор".into(),
         },
     ];
 
@@ -303,8 +284,10 @@ fn apply_buttons(hwnd: HWND, buttons: Vec<ButtonSpec>, tooltip: String) {
             state.taskbar = Some(ComSend(taskbar));
         }
 
-        let cx = GetSystemMetrics(SM_CXSMICON);
-        let cy = GetSystemMetrics(SM_CYSMICON);
+        // Enlarge every glyph equally; Windows centers the five-button row
+        // and supplies its own button padding and hit targets.
+        let cx = GetSystemMetrics(SM_CXSMICON) * 5 / 4;
+        let cy = GetSystemMetrics(SM_CYSMICON) * 5 / 4;
         let image_list = if let Some(raw) = state.image_list {
             HIMAGELIST(raw)
         } else {
@@ -450,8 +433,7 @@ fn handle_button_action(index: u32) {
     };
 
     match index {
-        0 => send(AudioMessage::ToggleShuffle),
-        1 => {
+        0 => {
             let Some(rt) = RUNTIME.get() else { return };
             rt.spawn(async move {
                 let Some(track_id) = ctx.audio.signals.current_track_id.get() else {
@@ -460,10 +442,10 @@ fn handle_button_action(index: u32) {
                 library::toggle_dislike(&ctx, track_id).await;
             });
         }
-        2 => send(AudioMessage::Prev),
-        3 => send(AudioMessage::PlayPause),
-        4 => send(AudioMessage::Next),
-        5 => {
+        1 => send(AudioMessage::Prev),
+        2 => send(AudioMessage::PlayPause),
+        3 => send(AudioMessage::Next),
+        4 => {
             let Some(rt) = RUNTIME.get() else { return };
             rt.spawn(async move {
                 let Some(track_id) = ctx.audio.signals.current_track_id.get() else {
@@ -472,7 +454,6 @@ fn handle_button_action(index: u32) {
                 library::toggle_like(&ctx, track_id).await;
             });
         }
-        6 => send(AudioMessage::ToggleRepeatMode),
         _ => {}
     }
 }

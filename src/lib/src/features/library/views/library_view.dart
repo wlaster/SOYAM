@@ -35,6 +35,7 @@ class _LibraryViewState extends State<LibraryView>
   late AppSection _root;
   bool _refreshBusy = false;
   EffectCleanup? _refreshSub;
+  EffectCleanup? _dislikeSub;
   var _lastRefreshSeen = 0;
 
   Future<void> _refreshCurrentTab() async {
@@ -97,6 +98,17 @@ class _LibraryViewState extends State<LibraryView>
     unawaited(refreshPlaylists());
     unawaited(refreshLikedAlbums());
     unawaited(refreshLikedArtists());
+    var lastTrack = playerStateSignal.peek()?.currentTrack;
+    _dislikeSub = playerStateSignal.subscribe((state) {
+      final track = state?.currentTrack;
+      final changed =
+          track?.id != lastTrack?.id ||
+          track?.isDisliked != lastTrack?.isDisliked;
+      lastTrack = track;
+      if (changed && _tabController.index == 4) {
+        unawaited(refreshDislikedTracks());
+      }
+    });
     _lastRefreshSeen = refreshRequestSignal.peek();
     _refreshSub = refreshRequestSignal.subscribe((count) {
       if (count == _lastRefreshSeen) return;
@@ -113,6 +125,7 @@ class _LibraryViewState extends State<LibraryView>
   @override
   void dispose() {
     _refreshSub?.call();
+    _dislikeSub?.call();
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -201,7 +214,7 @@ class _LibraryViewState extends State<LibraryView>
             isNarrow ? 20 : 40,
             isNarrow ? 16 : 40,
             isNarrow ? 20 : 40,
-            isNarrow ? 8 : 20,
+            isNarrow ? 8 : 24,
           ),
           child: const Row(
             children: [Expanded(child: CommonPageTitle(title: 'Библиотека'))],
@@ -605,6 +618,7 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                           final track = tracks[index];
                           return CommonTrackTile(
                             trackId: track.id,
+                            isDisliked: track.isDisliked,
                             isExplicit: track.isExplicit,
                             title: track.title,
                             version: track.version,
@@ -1196,6 +1210,7 @@ class _DislikedTracksTab extends StatelessWidget {
           final track = tracks[index];
           return CommonTrackTile(
             trackId: track.id,
+            isDisliked: track.isDisliked,
             isExplicit: track.isExplicit,
             title: track.title,
             version: track.version,
@@ -1209,7 +1224,6 @@ class _DislikedTracksTab extends StatelessWidget {
               icon: const Icon(Icons.heart_broken_rounded),
               onPressed: () async {
                 await PlaybackController.toggleDislike(trackId: track.id);
-                await refreshDislikedTracks();
               },
             ),
             onTap: () =>

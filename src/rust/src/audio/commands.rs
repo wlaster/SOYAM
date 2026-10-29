@@ -64,6 +64,7 @@ pub enum AudioMessage {
         result: Result<yandex_music::model::rotor::session::Session, String>,
     },
     SyncLiked,
+    WaveFeedbackApplied { generation: u64, session_id: String },
     WaveLike(String),
     WaveUnlike(String),
     WaveDislike(String),

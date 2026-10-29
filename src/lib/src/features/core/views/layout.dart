@@ -234,7 +234,12 @@ class _RootBucket extends StatelessWidget {
             offstage: !isVisible,
             child: TickerMode(
               enabled: isVisible,
-              child: Stack(children: _buildWindowStack(stack)),
+              child: Platform.isWindows
+                  ? _PageReveal(
+                      visible: isVisible,
+                      child: Stack(children: _buildWindowStack(stack)),
+                    )
+                  : Stack(children: _buildWindowStack(stack)),
             ),
           ),
         );
@@ -251,6 +256,23 @@ class _RootBucket extends StatelessWidget {
 
       // Keep only the current and previous screens in the tab stack
       final isDeeplyHidden = index < stack.length - 2;
+
+      if (Platform.isWindows) {
+        return Offstage(
+          key: ValueKey('win_${state.section}_${state.id}_$index'),
+          offstage: !isLast,
+          child: TickerMode(
+            enabled: isLast,
+            child: _PageReveal(
+              visible: isLast,
+              child: IgnorePointer(
+                ignoring: !isLast,
+                child: _WindowContent(state: state, index: index),
+              ),
+            ),
+          ),
+        );
+      }
 
       return Offstage(
         key: ValueKey('win_${state.section}_${state.id}_$index'),
@@ -282,6 +304,71 @@ class _RootBucket extends StatelessWidget {
       );
     }).toList();
   }
+}
+
+class _PageReveal extends StatefulWidget {
+  final bool visible;
+  final Widget child;
+
+  const _PageReveal({required this.visible, required this.child});
+
+  @override
+  State<_PageReveal> createState() => _PageRevealState();
+}
+
+class _PageRevealState extends State<_PageReveal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  );
+  bool _reduceMotion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.visible) _controller.forward();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (_reduceMotion) _controller.value = widget.visible ? 1 : 0;
+  }
+
+  @override
+  void didUpdateWidget(covariant _PageReveal oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.visible == widget.visible) return;
+    if (widget.visible && !_reduceMotion) {
+      _controller.forward(from: 0);
+    } else {
+      _controller.value = widget.visible ? 1 : 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    child: widget.child,
+    builder: (context, child) {
+      final progress = Curves.easeOutCubic.transform(_controller.value);
+      return Opacity(
+        opacity: progress,
+        child: Transform.translate(
+          offset: Offset(0, 18 * (1 - progress)),
+          child: child,
+        ),
+      );
+    },
+  );
 }
 
 class _AnimatedPlayerBar extends StatelessWidget {
@@ -463,8 +550,8 @@ class _FloatingBackButton extends StatelessWidget {
                         ? ((currentNavStateSignal.value.section ==
                                       AppSection.home &&
                                   showLyricsSignal.value)
-                              ? 0.66
-                              : 0.72)
+                              ? 0.61
+                              : 0.67)
                         : 0.88,
                   ),
               hoverColor: Theme.of(
@@ -530,8 +617,8 @@ class _FloatingRefreshButtonState extends State<_FloatingRefreshButton> {
         if (!_refreshable.contains(currentNavStateSignal.value.section)) {
           return const SizedBox.shrink();
         }
-        // Without the back button take its place, otherwise sit below it.
-        const top = 76.0;
+        // Align with the top of page content.
+        const top = 72.0;
         return Positioned(
           top: top,
           left: 20,
@@ -550,8 +637,8 @@ class _FloatingRefreshButtonState extends State<_FloatingRefreshButton> {
                         ? ((currentNavStateSignal.value.section ==
                                       AppSection.home &&
                                   showLyricsSignal.value)
-                              ? 0.66
-                              : 0.72)
+                              ? 0.61
+                              : 0.67)
                         : 0.88,
                   ),
               hoverColor: Theme.of(

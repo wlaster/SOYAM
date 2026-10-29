@@ -104,10 +104,20 @@ class _HomeCoverWidgetState extends State<HomeCoverWidget> {
                 child: Stack(
                   key: ValueKey(meta.coverUrl),
                   children: [
-                    AppCover(
-                      coverUrl: meta.coverUrl,
-                      size: size,
-                      radius: AppRadius.md,
+                    DecoratedBox(
+                      position: DecorationPosition.foreground,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                          width: 2,
+                        ),
+                      ),
+                      child: AppCover(
+                        coverUrl: meta.coverUrl,
+                        size: size,
+                        radius: AppRadius.md,
+                      ),
                     ),
                     if (meta.id != null)
                       Positioned.fill(

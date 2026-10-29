@@ -390,11 +390,9 @@ class _HomeMainControls extends StatelessWidget {
                 children: [
                   IconButton(
                     tooltip: isDisliked ? 'Снять дизлайк' : 'Дизлайк',
-                    icon: Icon(
-                      isDisliked
-                          ? Icons.heart_broken
-                          : Icons.heart_broken_outlined,
-                      size: 24,
+                    icon: CrossedHeartIcon(
+                      filled: isDisliked,
+                      size: 26,
                       color: isDisliked ? Colors.blueGrey : onSurfaceVariant,
                     ),
                     onPressed: () => trackId != null
@@ -412,16 +410,21 @@ class _HomeMainControls extends StatelessWidget {
                     ),
                     onPressed: () => unawaited(PlaybackController.prev()),
                   ),
-                  IconButton(
-                    tooltip: isPlaying ? 'Пауза' : 'Воспроизвести',
-                    iconSize: 84,
-                    icon: Icon(
-                      isPlaying
-                          ? Icons.pause_circle_filled_rounded
-                          : Icons.play_circle_filled_rounded,
+                  Tooltip(
+                    message: isPlaying ? 'Пауза' : 'Воспроизвести',
+                    verticalOffset: 44,
+                    preferBelow: true,
+                    child: IconButton(
+                      iconSize: 84,
+                      icon: Icon(
+                        isPlaying
+                            ? Icons.pause_circle_filled_rounded
+                            : Icons.play_circle_filled_rounded,
+                      ),
+                      color: onSurface,
+                      onPressed: () =>
+                          unawaited(PlaybackController.togglePlay()),
                     ),
-                    color: onSurface,
-                    onPressed: () => unawaited(PlaybackController.togglePlay()),
                   ),
                   IconButton(
                     tooltip: 'Следующий трек',
@@ -532,11 +535,9 @@ class _HomeMainControls extends StatelessWidget {
                 SizedBox(width: small ? 8 : 12),
                 IconButton(
                   tooltip: isDisliked ? 'Снять дизлайк' : 'Дизлайк',
-                  icon: Icon(
-                    isDisliked
-                        ? Icons.heart_broken
-                        : Icons.heart_broken_outlined,
-                    size: small ? 20 : 24,
+                  icon: CrossedHeartIcon(
+                    filled: isDisliked,
+                    size: small ? 22 : 26,
                     color: isDisliked ? Colors.blueGrey : onSurfaceVariant,
                   ),
                   onPressed: () => trackId != null
@@ -556,16 +557,20 @@ class _HomeMainControls extends StatelessWidget {
                   onPressed: () => unawaited(PlaybackController.prev()),
                 ),
                 SizedBox(width: small ? 8 : 12),
-                IconButton(
-                  tooltip: isPlaying ? 'Пауза' : 'Воспроизвести',
-                  iconSize: small ? 56 : 72,
-                  icon: Icon(
-                    isPlaying
-                        ? Icons.pause_circle_filled_rounded
-                        : Icons.play_circle_filled_rounded,
+                Tooltip(
+                  message: isPlaying ? 'Пауза' : 'Воспроизвести',
+                  verticalOffset: 44,
+                  preferBelow: true,
+                  child: IconButton(
+                    iconSize: small ? 56 : 72,
+                    icon: Icon(
+                      isPlaying
+                          ? Icons.pause_circle_filled_rounded
+                          : Icons.play_circle_filled_rounded,
+                    ),
+                    color: onSurface,
+                    onPressed: () => unawaited(PlaybackController.togglePlay()),
                   ),
-                  color: onSurface,
-                  onPressed: () => unawaited(PlaybackController.togglePlay()),
                 ),
                 SizedBox(width: small ? 8 : 12),
                 IconButton(

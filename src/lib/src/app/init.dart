@@ -36,6 +36,7 @@ class AppInit {
     final appDir = await _resolveDataDir();
     await simple.initAppInfrastructure(basePath: appDir.path);
     await loadProgressAppearance(appDir.path);
+    await loadSearchSections(appDir.path);
 
     try {
       final settings = await simple.getInitialSettings();

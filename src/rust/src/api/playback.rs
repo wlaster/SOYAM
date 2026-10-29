@@ -206,7 +206,7 @@ fn wave_seed_category(seed: &str) -> &str {
 /// Dart (`WaveController.toggleStation`):
 /// - if `seed` is active, remove it;
 /// - otherwise drop the default seed plus every seed of the same category,
-///   then add `seed`;
+///   then add `seed`; collection remains an independent opt-in to likes;
 /// - if nothing is left, fall back to the default seed.
 /// Afterwards a wave is (re)started with the resulting seeds.
 pub async fn toggle_wave_station(ctx: &AppContext, seed: String) {
@@ -215,7 +215,9 @@ pub async fn toggle_wave_station(ctx: &AppContext, seed: String) {
         seeds.retain(|s| *s != seed);
     } else {
         let prefix = format!("{}:", wave_seed_category(&seed));
-        seeds.retain(|s| *s != DEFAULT_WAVE_SEED && !s.starts_with(&prefix));
+        // Collection independently opts into likes alongside any station.
+        seeds.retain(|s| *s != DEFAULT_WAVE_SEED &&
+            (s == "personal:collection" || seed == "personal:collection" || !s.starts_with(&prefix)));
         seeds.push(seed);
     }
     if seeds.is_empty() {

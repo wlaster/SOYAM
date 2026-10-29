@@ -236,9 +236,9 @@ class CommonDetailHeader extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Flexible(child: titleWidget),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               Transform.translate(
-                offset: const Offset(0, 7),
+                offset: const Offset(0, 2),
                 child: titleTrailing,
               ),
             ],
@@ -309,20 +309,34 @@ class CommonDetailHeader extends StatelessWidget {
               ],
             )
           : Row(
-              crossAxisAlignment: isCircle
-                  ? CrossAxisAlignment.center
-                  : CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                AppCover(
-                  coverUrl: coverUrl,
-                  size: actualCoverSize,
-                  borderRadius: 16,
-                  circle: isCircle,
-                  canExpand: true,
-                  heroTag: coverUrl,
+                SizedBox(
+                  width: actualCoverSize,
+                  height: actualCoverSize,
+                  child: OverflowBox(
+                    alignment: Alignment.topLeft,
+                    maxWidth: isCircle ? 250 : actualCoverSize,
+                    maxHeight: isCircle ? 250 : actualCoverSize,
+                    child: AppCover(
+                      coverUrl: coverUrl,
+                      size: isCircle ? 250 : actualCoverSize,
+                      borderRadius: 16,
+                      circle: isCircle,
+                      canExpand: true,
+                      heroTag: coverUrl,
+                    ),
+                  ),
                 ),
-                SizedBox(width: screenWidth < 1100 ? 24 : 40),
-                Expanded(child: content),
+                SizedBox(width: 40 + (isCircle ? 250 - actualCoverSize : 0)),
+                Expanded(
+                  child: isCircle
+                      ? Transform.translate(
+                          offset: Offset(0, 250 - actualCoverSize),
+                          child: content,
+                        )
+                      : content,
+                ),
               ],
             ),
     );
@@ -445,14 +459,28 @@ class VolumeStateIcon extends StatelessWidget {
   Widget build(BuildContext context) => SignalBuilder(
     builder: (context) {
       final volume = playerVolumeSignal.value;
-      return Icon(
-        volume <= 0
-            ? Icons.volume_off_rounded
-            : volume < 50
-            ? Icons.volume_down_rounded
-            : Icons.volume_up_rounded,
-        size: size,
-        color: color,
+      return IconButton(
+        onPressed: PlaybackController.toggleMute,
+        tooltip: volume <= 0 ? 'Включить звук' : 'Выключить звук',
+        padding: EdgeInsets.zero,
+        constraints: BoxConstraints.tightFor(width: size + 8, height: size + 8),
+        style: const ButtonStyle(
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(8)),
+            ),
+          ),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        icon: Icon(
+          volume <= 0
+              ? Icons.volume_off_rounded
+              : volume < 50
+              ? Icons.volume_down_rounded
+              : Icons.volume_up_rounded,
+          size: size,
+          color: color,
+        ),
       );
     },
   );
@@ -633,6 +661,7 @@ class _AudioDeviceButtonState extends State<AudioDeviceButton> {
         ];
 
         return AppContextMenu<String>(
+          borderRadius: BorderRadius.circular(12),
           onOpen: () {
             if (!_devicesLoaded) {
               unawaited(_loadDevices());
@@ -1161,11 +1190,9 @@ class _AnimatedLikeButtonState extends State<AnimatedLikeButton>
                             ),
                           );
                         },
-                        child: Icon(
-                          widget.isLiked
-                              ? Icons.favorite
-                              : Icons.favorite_border,
+                        child: _HeartGlyph(
                           key: ValueKey<bool>(widget.isLiked),
+                          filled: widget.isLiked,
                           size: hexSize,
                           color: color,
                         ),
@@ -1335,4 +1362,94 @@ class AppDialog extends StatelessWidget {
       actions: actions,
     );
   }
+}
+
+class CrossedHeartIcon extends StatelessWidget {
+  const CrossedHeartIcon({
+    super.key,
+    this.filled = false,
+    this.size,
+    this.color,
+  });
+  final bool filled;
+  final double? size;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final extent = size ?? IconTheme.of(context).size ?? 24;
+    final tint =
+        color ??
+        IconTheme.of(context).color ??
+        Theme.of(context).colorScheme.onSurface;
+    return SizedBox.square(
+      dimension: extent,
+      child: Stack(
+        children: [
+          ClipPath(
+            clipper: const _HeartSlashGap(),
+            child: _HeartGlyph(filled: filled, size: extent, color: tint),
+          ),
+          Positioned.fill(
+            child: Center(
+              child: Transform.translate(
+                offset: Offset(-extent * 0.04, -extent * 0.04),
+                child: OverflowBox(
+                  maxWidth: extent * 1.21,
+                  child: Transform.rotate(
+                    angle: 0.785398,
+                    child: Container(
+                      width: extent * 1.21,
+                      height: extent / 12,
+                      color: tint,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeartSlashGap extends CustomClipper<Path> {
+  const _HeartSlashGap();
+
+  @override
+  Path getClip(Size size) {
+    final gap = size.width * 0.14;
+    return Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(Offset.zero & size)
+      ..moveTo(-gap, 0)
+      ..lineTo(0, -gap)
+      ..lineTo(size.width + gap, size.height)
+      ..lineTo(size.width, size.height + gap)
+      ..close();
+  }
+
+  @override
+  bool shouldReclip(_HeartSlashGap oldClipper) => false;
+}
+
+// Shared by like and dislike so the heart outline and size stay identical.
+class _HeartGlyph extends StatelessWidget {
+  const _HeartGlyph({
+    required this.filled,
+    required this.size,
+    required this.color,
+    super.key,
+  });
+  final bool filled;
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Icon(
+    filled ? Icons.favorite : Icons.favorite_border,
+    size: size,
+    color: color,
+  );
 }

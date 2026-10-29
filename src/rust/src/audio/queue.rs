@@ -241,6 +241,7 @@ impl QueueSignals {
 
 pub struct QueueManager {
     api: Arc<ApiService>,
+    library: Option<Arc<tokio::sync::RwLock<crate::audio::state::SystemState>>>,
 
     pub stream_manager: Arc<StreamManager>,
     url_prefetcher: UrlPrefetcher,
@@ -276,6 +277,7 @@ impl QueueManager {
 
         Self {
             api,
+            library: None,
             stream_manager,
             url_prefetcher,
             signals: QueueSignals::new(signals),
@@ -291,6 +293,32 @@ impl QueueManager {
         }
     }
 
+    pub fn set_library(&mut self, library: Arc<tokio::sync::RwLock<crate::audio::state::SystemState>>) {
+        self.library = Some(library);
+    }
+
+    async fn filter_wave_tracks(&self, tracks: Vector<Track>, keep_current: bool) -> Vector<Track> {
+        let Some(library) = &self.library else { return tracks; };
+        let library = library.read().await;
+        let seeds = self.signals.wave_seeds();
+        let current = if keep_current { self.signals.inner.current_track_id.get() } else { None };
+        filter_wave_likes(tracks, &library.liked, &seeds, current.as_deref())
+    }
+
+    async fn prune_wave_likes(&mut self) {
+        if !self.in_wave() { return; }
+        let mut queue = self.signals.queue();
+        let future = queue.split_off((self.signals.index() + 1).min(queue.len()));
+        queue.extend(self.filter_wave_tracks(future, false).await);
+        let buffer: Vector<Track> = self.wave_buffer.drain(..).collect();
+        self.wave_buffer = self.filter_wave_tracks(buffer, false).await.into_iter().collect();
+        while queue.len().saturating_sub(self.signals.index() + 1) < WAVE_VISIBLE_TRACKS {
+            let Some(track) = self.wave_buffer.pop_front() else { break; };
+            queue.push_back(track);
+        }
+        self.signals.set_queue(queue);
+    }
+
     pub fn wave_context(&self) -> Option<Session> {
         self.fetch.wave_session_clone()
     }
@@ -303,8 +331,21 @@ impl QueueManager {
         &mut self,
         context: PlaybackContext,
         tracks: Vector<Track>,
-        mut start_index: usize,
+        start_index: usize,
     ) -> Option<Track> {
+        self.load_inner(context, tracks, start_index, false).await
+    }
+
+    async fn load_inner(
+        &mut self,
+        context: PlaybackContext,
+        tracks: Vector<Track>,
+        mut start_index: usize,
+        keep_current: bool,
+    ) -> Option<Track> {
+        let tracks = if matches!(&context, PlaybackContext::Wave(_)) {
+            self.filter_wave_tracks(tracks, keep_current).await
+        } else { tracks };
         let keep_shuffle = self.signals.is_shuffled()
             && !matches!(&context, PlaybackContext::Wave(_));
         self.fetch.reset();
@@ -368,8 +409,7 @@ impl QueueManager {
                     let hidden: Vec<Track> = tracks.into_iter().skip(visible_count).collect();
 
                     self.signals.set_queue(visible);
-                    self.signals
-                        .set_index(start_index.min(visible_count.saturating_sub(1).max(0)));
+                    self.signals.set_index(0);
                     for t in hidden {
                         self.wave_buffer.push_back(t);
                     }
@@ -401,6 +441,16 @@ impl QueueManager {
             self.wave_by_seed(&seed_track);
         }
 
+        if self.in_wave() && self.signals.queue().is_empty() {
+            // Entire pages can consist of likes. Keep the session and ask for
+            // more without inventing skip/dislike feedback for unseen tracks.
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+            for _ in 0..4 {
+                self.trigger_fetch();
+                if tokio::time::timeout_at(deadline, self.consume_fetch_result()).await.is_err() { break; }
+                if !self.signals.queue().is_empty() { break; }
+            }
+        }
         if keep_shuffle { self.toggle_shuffle(); }
         let start = self.signals.index();
         let track = self.signals.queue().get(start).cloned();
@@ -421,7 +471,7 @@ impl QueueManager {
         let mut queue = Vector::new();
         queue.push_back(current.clone());
         queue.extend(tracks.into_iter().filter(|t| t.id.to_base_id() != current.id.to_base_id()));
-        self.load(context, queue, 0).await;
+        self.load_inner(context, queue, 0, true).await;
         // The seed is already playing and was not started by this radio session.
         self.wave_feedback_sent = true;
     }
@@ -432,6 +482,7 @@ impl QueueManager {
         let generation_ref = self.generation.clone();
 
         let api = self.api.clone();
+        let library = self.library.clone();
         let handles = WaveExtensionHandles {
             queue: self.signals.raw_queue_handle(),
             queue_length: self.signals.raw_queue_length_handle(),
@@ -450,9 +501,11 @@ impl QueueManager {
             let additional: Vector<Track> =
                 session.sequence.iter().map(|s| s.track.clone()).collect();
 
-            if !additional.is_empty() {
-                handles.apply(additional, session);
-            }
+            let additional = if let Some(library) = library {
+                let library = library.read().await;
+                filter_wave_likes(additional, &library.liked, &[], None)
+            } else { additional };
+            handles.apply(additional, session);
         });
     }
 
@@ -519,6 +572,7 @@ impl QueueManager {
     }
 
     async fn try_advance_or_fetch(&mut self, current: usize) -> Option<Track> {
+        self.prune_wave_likes().await;
         let queue_len = self.signals.queue().len();
         if let Some(next) = PlaybackPolicy::try_advance(current, queue_len) {
             return self.advance_to(next);
@@ -527,26 +581,32 @@ impl QueueManager {
         // Bounded wait: never park the audio actor on a ~30s network fetch.
         // On timeout the fetch stays in flight and poll_fetch() reaps it;
         // the caller treats None as queue end for now.
-        if self.fetch.is_fetching()
-            && let Some((new_tracks, session, failed_feedbacks)) = self
-                .fetch
-                .await_task_timeout(std::time::Duration::from_secs(5))
-                .await
-        {
-            self.requeue_failed_wave_feedbacks(failed_feedbacks);
-            if let Some(session) = session {
-                // Page response: keep the created session stable, only
-                // remember which batch delivered these tracks.
-                self.fetch
-                    .remember_wave_batch(&session.batch_id, &new_tracks);
-            }
-            if !new_tracks.is_empty() {
-                self.wave_append(new_tracks);
-                let queue_len = self.signals.queue().len();
-                if let Some(next) = PlaybackPolicy::try_advance(current, queue_len) {
-                    return self.advance_to(next);
+        if self.in_wave() && !self.fetch.is_fetching() { self.trigger_fetch(); }
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        for _ in 0..4 {
+            if self.fetch.is_fetching()
+                && let Some((new_tracks, session, failed_feedbacks)) = self
+                    .fetch
+                    .await_task_timeout(deadline.saturating_duration_since(tokio::time::Instant::now()))
+                    .await
+            {
+                self.requeue_failed_wave_feedbacks(failed_feedbacks);
+                if let Some(session) = session {
+                    // Page response: keep the created session stable, only
+                    // remember which batch delivered these tracks.
+                    self.fetch
+                        .remember_wave_batch(&session.batch_id, &new_tracks);
+                }
+                if !new_tracks.is_empty() {
+                    self.wave_append(new_tracks).await;
+                    let queue_len = self.signals.queue().len();
+                    if let Some(next) = PlaybackPolicy::try_advance(current, queue_len) {
+                        return self.advance_to(next);
+                    }
                 }
             }
+            if !self.in_wave() || tokio::time::Instant::now() >= deadline { break; }
+            self.trigger_fetch();
         }
         None
     }
@@ -771,7 +831,7 @@ impl QueueManager {
     /// station survives instead of falling back to `user:onyourwave`.
     /// Buffered tracks stay playable; stale finish/skip events belong to the
     /// dead batch and are dropped so they can't 400 the new session.
-    pub fn apply_wave_preferences(&mut self, session: Session) -> bool {
+    pub async fn apply_wave_preferences(&mut self, session: Session) -> bool {
         if !self.in_wave() || !is_usable_wave_session(&session) || session.sequence.is_empty() {
             return false;
         }
@@ -789,7 +849,7 @@ impl QueueManager {
         *self.playback_context.lock() = PlaybackContext::Wave(session.clone());
         self.fetch.set_wave_session(session);
         self.signals.set_queue(queue);
-        self.wave_append(tracks);
+        self.wave_append(tracks).await;
         true
     }
 
@@ -813,7 +873,7 @@ impl QueueManager {
                 }
                 self.fetch.set_wave_session(session);
                 self.wave_feedbacks.clear();
-                self.wave_append(tracks);
+                self.wave_append(tracks).await;
             }
             Err(e) => error!(error = %e, "wave_session_recreate_failed"),
         }
@@ -849,6 +909,7 @@ impl QueueManager {
     }
 
     pub async fn poll_fetch(&mut self) {
+        self.prune_wave_likes().await;
         if self.fetch.is_finished() {
             self.consume_fetch_result().await;
         }
@@ -870,11 +931,14 @@ impl QueueManager {
             return false;
         }
 
-        self.wave_append(tracks);
+        self.wave_append(tracks).await;
         true
     }
 
-    fn wave_append(&mut self, tracks: Vec<Track>) {
+    async fn wave_append(&mut self, tracks: Vec<Track>) {
+        let tracks: Vec<Track> = if self.in_wave() {
+            self.filter_wave_tracks(tracks.into_iter().collect(), false).await.into_iter().collect()
+        } else { tracks };
         if self.in_wave() {
             let mut known_ids: std::collections::HashSet<String> =
                 self.signals.queue().iter().map(|t| t.id.clone()).collect();
@@ -973,6 +1037,22 @@ pub fn as_wave_seed(track: &Track) -> String {
     }
 }
 
+/// Only explicit likes are excluded; playlist membership and artist/album
+/// likes never count as track likes. The seed already playing is preserved.
+fn filter_wave_likes(
+    tracks: Vector<Track>,
+    liked: &crate::audio::liked::LikedCache,
+    seeds: &[String],
+    current: Option<&str>,
+) -> Vector<Track> {
+    use crate::util::track::CleanId;
+    let include_likes = seeds.iter().any(|seed| seed == "personal:collection");
+    tracks.into_iter().filter(|track| {
+        !liked.is_disliked(&track.id) && (include_likes ||
+            current.is_some_and(|id| id.to_base_id() == track.id.to_base_id()) || !liked.is_liked(&track.id))
+    }).collect()
+}
+
 /// Normalize a wave seed for the rotor API: a `track:id:title` UI seed
 /// becomes the `track:id` the API expects; anything else passes through.
 pub(crate) fn clean_wave_seed(seed: &str) -> String {
@@ -1011,6 +1091,85 @@ mod tests {
             AudioSignals::new(),
             Arc::new(TrackProgress::default()),
         )
+    }
+
+    #[test]
+    fn dislikes_override_wave_likes_and_current_seed() {
+        let mut liked = crate::audio::liked::LikedCache::default();
+        liked.set_liked_ids(vec!["blocked".into()]);
+        liked.set_dislike_status("blocked:album", true);
+        let tracks: Vector<Track> = ["blocked:other", "allowed"].into_iter().map(test_track).collect();
+        for seeds in [vec![], vec!["personal:collection".into()]] {
+            let filtered = filter_wave_likes(tracks.clone(), &liked, &seeds, Some("blocked"));
+            assert_eq!(filtered.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["allowed"]);
+        }
+        liked.set_dislike_status("blocked", false);
+        assert_eq!(filter_wave_likes(tracks, &liked, &[], Some("blocked")).len(), 2);
+    }
+
+    #[test]
+    fn wave_likes_filter_normalizes_ids_and_keeps_only_explicit_opt_in() {
+        let mut liked = crate::audio::liked::LikedCache::default();
+        liked.set_liked_ids(vec!["liked:album".into()]);
+        liked.set_artist_like_status("artist", true);
+        liked.set_album_like_status(42, true);
+        liked.set_playlist_like_status(1, 2, true);
+        let tracks: Vector<Track> = ["liked", "liked:other", "new", "playlist-only"]
+            .into_iter().map(test_track).collect();
+        for station in ["user:onyourwave", "track:42", "artist:42", "mood:energetic", "personal:hits"] {
+            let filtered = filter_wave_likes(tracks.clone(), &liked, &[station.into()], None);
+            assert_eq!(filtered.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["new", "playlist-only"]);
+        }
+        assert_eq!(filter_wave_likes(tracks.clone(), &liked,
+            &["mood:energetic".into(), "personal:collection".into()], None).len(), 4);
+        assert_eq!(filter_wave_likes(tracks, &liked, &[], Some("liked:seed")).len(), 4);
+    }
+
+    #[tokio::test]
+    async fn wave_likes_filter_prunes_future_and_buffer_without_interrupting_current() {
+        let mut q = manager().await;
+        let library = Arc::new(tokio::sync::RwLock::new(crate::audio::state::SystemState::default()));
+        library.write().await.liked.set_liked_ids(vec!["t0".into(), "t1".into(), "t3".into()]);
+        q.set_library(library.clone());
+        *q.playback_context.lock() = PlaybackContext::Wave(serde_json::from_value(serde_json::json!({
+            "batchId":"new", "pumpkin":false, "radioSessionId":"radio",
+            "sequence":[], "terminated":false
+        })).unwrap());
+        q.signals.set_queue(standalone(3));
+        q.wave_buffer.push_back(test_track("t3"));
+        q.wave_buffer.push_back(test_track("t4"));
+        q.prune_wave_likes().await;
+        assert_eq!(q.signals.queue().iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["t0", "t2", "t4"]);
+        assert_eq!(q.signals.queue().back().unwrap().id, "t4");
+        assert!(q.wave_buffer.is_empty());
+        library.write().await.liked.set_like_status("t2", true);
+        q.prune_wave_likes().await;
+        assert_eq!(q.signals.queue().len(), 2);
+        q.load(PlaybackContext::Standalone, standalone(3), 1).await;
+        assert_eq!(q.signals.queue().len(), 3);
+        assert_eq!(q.signals.index(), 1);
+    }
+
+    #[tokio::test]
+    async fn wave_likes_filter_applies_to_initial_page_and_topups() {
+        let mut q = manager().await;
+        let library = Arc::new(tokio::sync::RwLock::new(crate::audio::state::SystemState::default()));
+        library.write().await.liked.set_liked_ids(vec!["t0:album".into(), "t2".into()]);
+        q.set_library(library);
+        let session: Session = serde_json::from_value(serde_json::json!({
+            "batchId":"new", "pumpkin":false, "radioSessionId":"radio",
+            "sequence":[], "terminated":false
+        })).unwrap();
+        q.signals.inner.set_current_track(Some(test_track("t0")));
+        assert_eq!(q.load(PlaybackContext::Wave(session.clone()), standalone(4), 0).await.unwrap().id, "t1");
+        q.wave_append(vec![test_track("t2"), test_track("fresh")]).await;
+        assert!(!q.signals.queue().iter().any(|t| t.id == "t2"));
+        assert!(q.signals.queue().iter().any(|t| t.id == "fresh"));
+        q.load_track_wave(PlaybackContext::Wave(session.clone()), standalone(4), test_track("t0")).await;
+        assert_eq!(q.signals.queue().front().unwrap().id, "t0");
+        assert!(!q.signals.queue().iter().any(|t| t.id == "t2"));
+        q.signals.set_wave_seeds(vec!["personal:collection".into()]);
+        assert_eq!(q.load(PlaybackContext::Wave(session), standalone(4), 0).await.unwrap().id, "t0");
     }
 
     fn standalone(n: usize) -> Vector<Track> {
@@ -1065,7 +1224,7 @@ mod tests {
                 bpm:100, energy:0.5, hue:0.5, user_collection_hue:0,
             },
         }];
-        assert!(q.apply_wave_preferences(new_session));
+        assert!(q.apply_wave_preferences(new_session).await);
         assert_eq!(q.signals.index(), 1);
         assert_eq!(q.signals.inner.current_track.get().unwrap().id, "t1");
         assert_eq!(q.signals.inner.position_ms.get(), 42000);

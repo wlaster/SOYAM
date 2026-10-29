@@ -1343,8 +1343,8 @@ class _FullPlayerControls extends StatelessWidget {
           children: [
             IconButton(
               iconSize: 24,
-              icon: Icon(
-                isDisliked ? Icons.heart_broken : Icons.heart_broken_outlined,
+              icon: CrossedHeartIcon(
+                filled: isDisliked,
                 color: isDisliked ? Colors.blueGrey : onSurfaceVariant,
               ),
               onPressed: trackId != null

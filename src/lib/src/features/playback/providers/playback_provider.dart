@@ -720,8 +720,12 @@ class PlaybackController {
     }
   }
 
-  static Future<void> toggleDislike({required String trackId}) =>
-      runRustAction((ctx) => rust.toggleDislike(ctx: ctx, trackId: trackId));
+  static Future<void> toggleDislike({required String trackId}) async {
+    await runRustAction(
+      (ctx) => rust.toggleDislike(ctx: ctx, trackId: trackId),
+    );
+    await refreshDislikedTracks();
+  }
 
   static Future<void> startTrackWave(String trackId, [String? title]) =>
       runRustAction(
@@ -732,6 +736,18 @@ class PlaybackController {
           ],
         ),
       );
+  static int _volumeBeforeMute = 100;
+
+  static Future<void> toggleMute() async {
+    final volume = playerVolumeSignal.peek();
+    if (volume > 0) {
+      _volumeBeforeMute = volume;
+      await changeVolume(0);
+    } else {
+      await changeVolume(_volumeBeforeMute);
+    }
+  }
+
   static Future<void> changeVolume(int volume) =>
       runRustAction((ctx) => rust.setVolume(ctx: ctx, volume: volume));
   static Future<void> changeTransientVolumeGain(int gain) =>

@@ -17,12 +17,14 @@ import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 /// - shows a bottom scrollbar thumb and previous/next arrows on desktop.
 class HorizontalShelf extends StatefulWidget {
   final double height;
+  final double coverExtent;
   final EdgeInsetsGeometry padding;
   final int itemCount;
   final Widget Function(BuildContext context, int index) itemBuilder;
 
   const HorizontalShelf({
     required this.height,
+    required this.coverExtent,
     required this.itemCount,
     required this.itemBuilder,
     super.key,
@@ -164,15 +166,15 @@ class _HorizontalShelfState extends State<HorizontalShelf> {
                   if (_canGoBack)
                     Positioned(
                       left: 4,
-                      top: 0,
-                      bottom: 0,
+                      top: 8,
+                      height: widget.coverExtent,
                       child: _arrowButton(context, -1),
                     ),
                   if (_canGoForward)
                     Positioned(
                       right: 4,
-                      top: 0,
-                      bottom: 0,
+                      top: 8,
+                      height: widget.coverExtent,
                       child: _arrowButton(context, 1),
                     ),
                 ],

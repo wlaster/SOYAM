@@ -21,6 +21,7 @@ class CommonTrackTile extends StatefulWidget {
   final String trackId;
   final int? durationMs;
   final bool isLiked;
+  final bool isDisliked;
   final bool isExplicit;
   final bool replaceLeadingWhenPlaying;
   final String title;
@@ -46,6 +47,7 @@ class CommonTrackTile extends StatefulWidget {
     super.key,
     this.durationMs,
     this.isLiked = false,
+    this.isDisliked = false,
     this.isExplicit = false,
     this.replaceLeadingWhenPlaying = false,
     this.version,
@@ -491,6 +493,24 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                           context,
                                           pendingTrackLikesSignal,
                                         ).contains(id);
+                                        final disliked =
+                                            widget.isDisliked ||
+                                            visibleSignal(
+                                              context,
+                                              dislikedTracksSignal,
+                                            ).any(
+                                              (track) =>
+                                                  track.id.split(':').first ==
+                                                  id,
+                                            );
+                                        if (disliked &&
+                                            !_isHovered.value &&
+                                            !Platform.isAndroid) {
+                                          return const SizedBox(
+                                            width: 40,
+                                            height: 40,
+                                          );
+                                        }
                                         return Tooltip(
                                           message: liked
                                               ? 'Убрать из любимых'

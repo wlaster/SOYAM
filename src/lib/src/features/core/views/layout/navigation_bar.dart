@@ -107,7 +107,7 @@ class _FloatingNavBarState extends State<FloatingNavBar>
         final useLyricsStyle =
             currentNavStateSignal.value.section == AppSection.home &&
             showLyricsSignal.value;
-        final alpha = blurEnabled ? (useLyricsStyle ? 0.66 : 0.72) : 0.88;
+        final alpha = blurEnabled ? (useLyricsStyle ? 0.61 : 0.67) : 0.88;
 
         final children = [
           if (isDesktop)

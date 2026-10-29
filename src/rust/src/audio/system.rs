@@ -124,7 +124,7 @@ impl AudioSystem {
             track_progress.clone(),
         );
 
-        let queue = QueueManager::new(
+        let mut queue = QueueManager::new(
             api.clone(),
             url_cache,
             stream_manager.clone(),
@@ -133,10 +133,14 @@ impl AudioSystem {
         );
 
         let state = Arc::new(RwLock::new(SystemState::default()));
+        queue.set_library(state.clone());
 
         // Load liked tracks from DB for instant start
         {
             let mut db = db.lock().await;
+            if let Ok(Some(ids)) = db.load_setting::<Vec<String>>("disliked_track_ids").await {
+                state.write().await.liked.replace_disliked_ids(&ids);
+            }
             if let Ok(ids) = db.load_liked_tracks().await {
                 let revision: Option<u64> = db
                     .load_setting("liked_tracks_revision")
@@ -230,8 +234,22 @@ impl AudioSystem {
 
         // Main Audio Loop
         tokio::spawn(async move {
-            while let Some(msg) = rx.recv().await {
-                system_loop.process_message(msg).await;
+            let mut library_changed = system_loop.signals.library_changed_rx.clone();
+            loop {
+                tokio::select! {
+                    msg = rx.recv() => {
+                        let Some(msg) = msg else { break; };
+                        system_loop.process_message(msg).await;
+                    }
+                    result = library_changed.changed() => {
+                        if result.is_err() { break; }
+                    }
+                }
+                if let Some(track) = system_loop.signals.current_track.get()
+                    && system_loop.track_is_disliked(&track).await
+                {
+                    system_loop.play_filtered_track(track, false, Duration::ZERO, false).await;
+                }
             }
             // Channel closed on context teardown: stop SMTC loops and the
             // controller monitor/playback task in a defined order instead
@@ -383,7 +401,8 @@ impl AudioSystem {
     async fn play_filtered_track(&mut self, mut track: Track, start_paused: bool, mut position: Duration, soft_reload: bool) {
         let limit = self.signals.queue.get().len().max(1);
         for _ in 0..=limit {
-            if crate::app::settings::ALLOW_ADULT_CONTENT.load(Ordering::Relaxed) || !crate::app::settings::is_adult_track(&track) {
+            let disliked = self.state.read().await.liked.is_disliked(&track.id);
+            if !disliked && (crate::app::settings::ALLOW_ADULT_CONTENT.load(Ordering::Relaxed) || !crate::app::settings::is_adult_track(&track)) {
                 self.controller.play_track(track, start_paused, position, soft_reload).await;
                 return;
             }
@@ -393,6 +412,20 @@ impl AudioSystem {
             }
         }
         self.controller.stop().await;
+    }
+
+    async fn track_is_disliked(&self, track: &Track) -> bool {
+        self.state.read().await.liked.is_disliked(&track.id)
+    }
+
+    async fn resume_filtered(&mut self) {
+        if let Some(track) = self.signals.current_track.get()
+            && self.track_is_disliked(&track).await
+        {
+            self.play_filtered_track(track, false, Duration::ZERO, false).await;
+            return;
+        }
+        self.controller.resume().await;
     }
 
     async fn load_standalone(
@@ -422,6 +455,10 @@ impl AudioSystem {
 
     async fn reload_track(&mut self) {
         if let Some(track) = self.signals.current_track.get() {
+            if self.track_is_disliked(&track).await {
+                self.play_filtered_track(track, false, Duration::ZERO, false).await;
+                return;
+            }
             let position_ms = self.signals.position_ms.get();
             self.signals.set_buffering(true);
             self.controller.invalidate_track(&track.id);
@@ -466,11 +503,11 @@ impl AudioSystem {
                 if self.signals.is_playing.get() {
                     self.controller.pause().await;
                 } else {
-                    self.controller.resume().await;
+                    self.resume_filtered().await;
                 }
             }
             AudioMessage::Pause => self.controller.pause().await,
-            AudioMessage::Resume => self.controller.resume().await,
+            AudioMessage::Resume => self.resume_filtered().await,
             AudioMessage::Stop => {
                 self.begin_context_change();
                 self.controller.stop().await;
@@ -658,7 +695,7 @@ impl AudioSystem {
                     && self.queue.in_wave() {
                     match result {
                         Ok(session) => {
-                            if self.queue.apply_wave_preferences(session) { self.send_wave_started(); }
+                            if self.queue.apply_wave_preferences(session).await { self.send_wave_started(); }
                             else { (self.error_sink)("Не удалось обновить Мою волну".into()); }
                         },
                         Err(_) => (self.error_sink)("Настройка сохранена. Не удалось обновить Мою волну — запустите её ещё раз".into()),
@@ -674,6 +711,12 @@ impl AudioSystem {
                 )
                 .await;
                 self.signals.changed.send_replace(());
+            }
+            AudioMessage::WaveFeedbackApplied { generation, session_id } => {
+                if self.context_generation.load(Ordering::Acquire) == generation
+                    && self.queue.wave_context().and_then(|s| s.radio_session_id).as_deref() == Some(&session_id) {
+                    self.queue.refresh_wave_queue();
+                }
             }
             AudioMessage::WaveLike(track_id) => {
                 if self.queue.in_wave() {
@@ -702,9 +745,10 @@ impl AudioSystem {
                 }
             }
             AudioMessage::WaveDislike(track_id) => {
+                use crate::util::track::CleanId;
                 if self.queue.in_wave() {
                     let current = self.signals.current_track.get();
-                    if current.as_ref().map(|t| t.id.as_str()) == Some(&track_id) {
+                    if current.as_ref().map(|t| t.id.to_base_id()) == Some(track_id.to_base_id()) {
                         if let Some(track) = current {
                             self.send_wave_dislike_skip(&track).await;
                         }
@@ -712,7 +756,6 @@ impl AudioSystem {
                         let batch = self.queue.wave_batch_for_id(&track_id);
                         self.send_wave_feedback("dislike", Some(track_id), batch, None);
                         self.queue.refresh_wave_queue();
-                        self.play_next().await;
                     }
                 }
             }
@@ -831,6 +874,9 @@ impl AudioSystem {
         let from = Some(session.source_id().to_string());
 
         let api = self.yandex.api.clone();
+        let tx = self.tx.clone();
+        let generation = self.context_generation.load(Ordering::Acquire);
+        let session_id = session.radio_session_id.clone().unwrap_or_default();
         tokio::spawn(async move {
             if let Err(e) = api
                 .send_rotor_feedback(
@@ -853,6 +899,9 @@ impl AudioSystem {
                 );
             } else {
                 tracing::info!(feedback_type, "wave_feedback_sent");
+                if matches!(feedback_type, "like" | "unlike") {
+                    let _ = tx.send(AudioMessage::WaveFeedbackApplied { generation, session_id }).await;
+                }
             }
         });
     }
@@ -867,8 +916,7 @@ impl AudioSystem {
         self.send_wave_feedback("trackStarted", Some(track_id), batch, None);
     }
 
-    // Single helper for track feedback; `post` keeps the dislike-only
-    // queue refresh (like/unlike leave the prefetch buffer intact).
+    // Dislikes refresh immediately; likes refresh after acknowledgement.
     fn send_wave_track_with_post(
         &mut self,
         feedback_type: &'static str,
@@ -883,8 +931,7 @@ impl AudioSystem {
     }
 
     pub fn send_wave_like(&mut self, track: &Track) {
-        // Like/unlike don't change the queue: only send feedback, keep the
-        // 3-track prefetch buffer intact (refresh only on dislike).
+        // Refresh after the server accepts this preference; keep current playback.
         self.send_wave_track_with_post("like", track, WavePostAction::None);
     }
 
@@ -906,6 +953,30 @@ impl AudioSystem {
         self.send_wave_track_with_post("undislike", track, WavePostAction::Refresh);
     }
 
+    async fn sync_dislikes(
+        api: &ApiService,
+        state: &RwLock<SystemState>,
+        signals: &AudioSignals,
+        db: &tokio::sync::Mutex<crate::db::AppDatabase>,
+    ) {
+        match api.fetch_disliked_ids().await {
+            Ok(ids) => {
+                let changed = {
+                    let mut state = state.write().await;
+                    let before = state.liked.snapshot().1;
+                    state.liked.replace_disliked_ids(&ids);
+                    before != state.liked.snapshot().1
+                };
+                let _ = db.lock().await.save_setting("disliked_track_ids", &ids).await;
+                if changed {
+                    signals.library_changed.send_replace(());
+                    signals.changed.send_replace(());
+                }
+            }
+            Err(error) => tracing::warn!("Disliked collection sync failed: {error:?}"),
+        }
+    }
+
     pub async fn sync_liked_collection_with(
         api: Arc<ApiService>,
         state: Arc<RwLock<SystemState>>,
@@ -921,6 +992,7 @@ impl AudioSystem {
             Ok(outcome) => {
                 let (new_revision, count, ids) = match outcome {
                     LikedTracksSync::Unchanged => {
+                        Self::sync_dislikes(&api, &state, &signals, &db_arc).await;
                         tracing::debug!("Liked tracks unchanged (revision {:?})", revision);
                         return;
                     }
@@ -932,6 +1004,7 @@ impl AudioSystem {
                         // Belt and suspenders (the server should send no
                         // `values` instead when unchanged).
                         if Some(new_revision) == revision {
+                            Self::sync_dislikes(&api, &state, &signals, &db_arc).await;
                             return;
                         }
                         let count = liked_track_ids.len();
@@ -949,6 +1022,8 @@ impl AudioSystem {
                 };
 
                 let mut db = db_arc.lock().await;
+                let dislikes: Vec<String> = state.read().await.liked.snapshot().1.into_iter().collect();
+                let _ = db.save_setting("disliked_track_ids", &dislikes).await;
                 let _ = db.save_liked_tracks(&ids).await;
                 let _ = db
                     .save_setting("liked_tracks_revision", &new_revision)
@@ -956,6 +1031,7 @@ impl AudioSystem {
                 drop(db);
 
                 signals.library_changed.send_replace(());
+                signals.changed.send_replace(());
 
                 tracing::info!(
                     "Synced {} liked track IDs (revision {:?} -> {})",
@@ -966,6 +1042,7 @@ impl AudioSystem {
             }
             Err(e) => {
                 tracing::warn!("Liked collection sync failed: {:?}", e);
+                Self::sync_dislikes(&api, &state, &signals, &db_arc).await;
                 // Legacy fallback (servers without collection/sync): full pull.
                 // No revision comes back, so the next sync retries the gated path.
                 match api.fetch_liked_ids().await {

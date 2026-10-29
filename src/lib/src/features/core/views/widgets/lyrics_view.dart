@@ -301,7 +301,12 @@ class _LyricsWidgetState extends State<LyricsWidget> {
                           '${widget.trackId}_${result.providerName}_plain',
                         ),
                         primary: false,
-                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+                        padding: EdgeInsets.fromLTRB(
+                          24,
+                          Platform.isWindows ? 32 : 8,
+                          24,
+                          40,
+                        ),
                         itemCount: lines.length,
                         itemBuilder: (context, index) => Padding(
                           padding: const EdgeInsets.only(bottom: 12),

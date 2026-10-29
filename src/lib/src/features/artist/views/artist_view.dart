@@ -264,7 +264,7 @@ class _ArtistViewState extends State<ArtistView> {
                   title: 'Альбомы',
                   padding: EdgeInsets.fromLTRB(
                     context.horizontalPadding,
-                    24,
+                    36,
                     context.horizontalPadding,
                     16,
                   ),
@@ -272,6 +272,8 @@ class _ArtistViewState extends State<ArtistView> {
               ),
               SliverToBoxAdapter(
                 child: HorizontalShelf(
+                  coverExtent: (context.isNarrow ? 132.0 : 160.0) - 16,
+                  padding: EdgeInsets.only(left: context.isNarrow ? 28 : 32),
                   height: (context.isNarrow ? 132.0 : 160.0) + 80,
                   itemCount: albums.length,
                   itemBuilder: (context, i) {
@@ -293,7 +295,7 @@ class _ArtistViewState extends State<ArtistView> {
                 title: 'Популярные треки',
                 padding: EdgeInsets.fromLTRB(
                   context.horizontalPadding,
-                  24,
+                  albums.isNotEmpty ? 12 : 24,
                   context.horizontalPadding,
                   16,
                 ),
@@ -310,6 +312,7 @@ class _ArtistViewState extends State<ArtistView> {
                 final track = tracks[index];
                 return CommonTrackTile(
                   trackId: track.id,
+                  isDisliked: track.isDisliked,
                   isExplicit: track.isExplicit,
                   title: track.title,
                   version: track.version,

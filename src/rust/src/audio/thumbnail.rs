@@ -285,7 +285,13 @@ unsafe extern "system" fn subclass_proc(
 unsafe fn handle_iconic_request(hwnd: HWND, msg: u32, lparam: LPARAM) -> LRESULT {
     unsafe {
         let (tw, th) = match msg {
-            WM_DWMSENDICONICTHUMBNAIL => ((lparam.0 >> 16) as u32, (lparam.0 & 0xFFFF) as u32),
+            WM_DWMSENDICONICTHUMBNAIL => {
+                // Stable square preview, independent of the main window aspect ratio.
+                let side = ((lparam.0 >> 16) as u32)
+                    .min((lparam.0 & 0xFFFF) as u32)
+                    .min(184);
+                (side, side)
+            }
             WM_DWMSENDICONICLIVEPREVIEWBITMAP => {
                 let mut rc = RECT::default();
                 let _ = GetClientRect(hwnd, &mut rc);
@@ -367,7 +373,7 @@ fn create_hbitmap_from_wic(bytes: &[u8], target_w: u32, target_h: u32) -> Option
             .ok()?;
         let frame = decoder.GetFrame(0).ok()?;
 
-        let size = target_w.min(target_h).saturating_sub(16).max(1);
+        let size = target_w.min(target_h).saturating_sub(8).max(1);
         let radius = (size as f32 * 0.12) as i32;
         let r_f = radius as f32;
 

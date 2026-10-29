@@ -28,7 +28,8 @@ class CommonQualitySelector extends SignalWidget {
         final meta = trackMetadataSignal.value;
         // No accent subscription while the hosting tab is hidden.
         final accentColor =
-            this.accentColor ?? visibleSignal<Color>(context, accentColorSignal);
+            this.accentColor ??
+            visibleSignal<Color>(context, accentColorSignal);
 
         final items = <AppContextMenuItem<dynamic>>[];
 
@@ -118,14 +119,17 @@ class CommonQualitySelector extends SignalWidget {
             }
           },
           items: items,
-          child: SizedBox(
-            width: 40,
-            height: 40,
-            child: Center(
-              child: Icon(
-                Icons.speed_rounded,
-                size: iconSize,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+          child: Tooltip(
+            message: 'Настройки звука',
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: Center(
+                child: Icon(
+                  Icons.speed_rounded,
+                  size: iconSize,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ),

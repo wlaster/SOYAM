@@ -1,5 +1,4 @@
 import 'package:material_ui/material_ui.dart';
-
 import 'package:yayma/src/features/core/theme/app_tokens.dart';
 
 class AppContextMenuItem<T> {

@@ -295,6 +295,15 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: scheme.surfaceContainerHighest,
+        surfaceTintColor: Colors.transparent,
+        iconColor: scheme.onSurfaceVariant,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: scheme.onSurface.withValues(alpha: 0.1)),
+        ),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white.withValues(alpha: 0.05),

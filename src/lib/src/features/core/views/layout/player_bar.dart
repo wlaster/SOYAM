@@ -32,7 +32,7 @@ class PlayerBar extends StatelessWidget {
 
         final useLyricsStyle = isHome && showLyrics;
         final blurEnabled = blurEffectsEnabledSignal.value;
-        final alpha = blurEnabled ? (useLyricsStyle ? 0.66 : 0.72) : 0.88;
+        final alpha = blurEnabled ? (useLyricsStyle ? 0.61 : 0.67) : 0.88;
         const blur = 12.0;
 
         // Dynamic background color based on theme
@@ -318,10 +318,8 @@ class _PlayerControls extends StatelessWidget {
                                 tooltip: isDisliked
                                     ? 'Снять дизлайк'
                                     : 'Дизлайк',
-                                icon: Icon(
-                                  isDisliked
-                                      ? Icons.heart_broken
-                                      : Icons.heart_broken_outlined,
+                                icon: CrossedHeartIcon(
+                                  filled: isDisliked,
                                   size: 20,
                                   color: isDisliked
                                       ? Colors.blueGrey

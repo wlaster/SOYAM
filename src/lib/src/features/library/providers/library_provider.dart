@@ -783,8 +783,12 @@ Future<int> deleteAllLikedTracksAction(List<SimpleTrackDto> tracks) async {
 final FlutterSignal<List<SimpleTrackDto>> dislikedTracksSignal = signal([]);
 final FlutterSignal<bool> dislikedTracksLoadingSignal = signal(false);
 final FlutterSignal<bool> dislikedTracksErrorSignal = signal(false);
+bool _dislikedRefreshPending = false;
 Future<void> refreshDislikedTracks() async {
-  if (dislikedTracksLoadingSignal.peek()) return;
+  if (dislikedTracksLoadingSignal.peek()) {
+    _dislikedRefreshPending = true;
+    return;
+  }
   dislikedTracksLoadingSignal.value = true;
   dislikedTracksErrorSignal.value = false;
   try {
@@ -796,5 +800,9 @@ Future<void> refreshDislikedTracks() async {
     }
   } finally {
     dislikedTracksLoadingSignal.value = false;
+    if (_dislikedRefreshPending) {
+      _dislikedRefreshPending = false;
+      await refreshDislikedTracks();
+    }
   }
 }

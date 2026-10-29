@@ -264,6 +264,7 @@ class _PlaylistContentState extends State<_PlaylistContent> {
         title: widget.playlist.title,
         coverUrl: widget.playlist.coverUrl,
         titleTrailing: AppContextMenu<String>(
+          borderRadius: BorderRadius.circular(12),
           onSelected: (value) async {
             switch (value) {
               case 'rename':
@@ -630,6 +631,7 @@ class _TrackTile extends StatelessWidget {
         : dragIndicator;
     return CommonTrackTile(
       trackId: track.id,
+      isDisliked: track.isDisliked,
       isExplicit: track.isExplicit,
       title: track.title,
       version: track.version,

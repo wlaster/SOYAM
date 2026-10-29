@@ -67,7 +67,7 @@ class _SearchViewState extends State<SearchView> {
             Padding(
               padding: isNarrow
                   ? const EdgeInsets.fromLTRB(20, 16, 20, 8)
-                  : context.viewPadding.copyWith(top: 40),
+                  : context.viewPadding.copyWith(top: 40, bottom: 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -192,11 +192,111 @@ class _EmptySearchState extends StatelessWidget {
   }
 }
 
-class _SearchResults extends StatelessWidget {
+class _SearchResults extends StatefulWidget {
   final SearchResultsDto results;
   final ScrollController controller;
 
   const _SearchResults({required this.results, required this.controller});
+
+  @override
+  State<_SearchResults> createState() => _SearchResultsState();
+}
+
+class _SearchResultsState extends State<_SearchResults> {
+  bool _artistsCollapsed = searchArtistsCollapsed;
+  bool _albumsCollapsed = searchAlbumsCollapsed;
+
+  void _toggleSection({required bool artists}) {
+    setState(() {
+      if (artists) {
+        _artistsCollapsed = !_artistsCollapsed;
+      } else {
+        _albumsCollapsed = !_albumsCollapsed;
+      }
+    });
+    unawaited(
+      saveSearchSections(
+        artistsCollapsed: _artistsCollapsed,
+        albumsCollapsed: _albumsCollapsed,
+      ),
+    );
+  }
+
+  SearchResultsDto get results => widget.results;
+  ScrollController get controller => widget.controller;
+
+  Widget _sectionHeader(
+    String title,
+    bool collapsed,
+    VoidCallback onPressed, {
+    double top = 24,
+  }) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        context.horizontalPadding,
+        top,
+        context.horizontalPadding,
+        24,
+      ),
+      child: Row(
+        children: [
+          CommonSectionTitle(title: title, padding: EdgeInsets.zero),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: onPressed,
+            tooltip: collapsed ? 'Развернуть' : 'Свернуть',
+            icon: AnimatedRotation(
+              turns: collapsed ? 0.5 : 0,
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 300),
+              curve: Curves.easeInOutCubic,
+              child: const Icon(Icons.expand_less_rounded),
+            ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+            style: const ButtonStyle(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: WidgetStatePropertyAll(
+                RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _animatedShelf({required bool collapsed, required Widget child}) {
+    return SliverToBoxAdapter(
+      child: IgnorePointer(
+        ignoring: collapsed,
+        child: ExcludeFocus(
+          excluding: collapsed,
+          child: ExcludeSemantics(
+            excluding: collapsed,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 1, end: collapsed ? 0 : 1),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 300),
+              curve: Curves.easeInOutCubic,
+              builder: (context, value, child) => ClipRect(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: value,
+                  child: Opacity(opacity: value, child: child),
+                ),
+              ),
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -207,12 +307,20 @@ class _SearchResults extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           if (results.artists.isNotEmpty) ...[
-            const SliverToBoxAdapter(
-              child: CommonSectionTitle(title: 'Артисты'),
-            ),
             SliverToBoxAdapter(
+              child: _sectionHeader(
+                'Артисты',
+                _artistsCollapsed,
+                () => _toggleSection(artists: true),
+                top: context.isNarrow ? 0 : 24,
+              ),
+            ),
+            _animatedShelf(
+              collapsed: _artistsCollapsed,
               child: HorizontalShelf(
-                height: 210,
+                coverExtent: 144,
+                padding: EdgeInsets.only(left: context.isNarrow ? 28 : 32),
+                height: 240,
                 itemCount: results.artists.length,
                 itemBuilder: (context, i) =>
                     _ArtistSearchCard(artist: results.artists[i]),
@@ -220,11 +328,18 @@ class _SearchResults extends StatelessWidget {
             ),
           ],
           if (results.albums.isNotEmpty) ...[
-            const SliverToBoxAdapter(
-              child: CommonSectionTitle(title: 'Альбомы'),
-            ),
             SliverToBoxAdapter(
+              child: _sectionHeader(
+                'Альбомы',
+                _albumsCollapsed,
+                () => _toggleSection(artists: false),
+              ),
+            ),
+            _animatedShelf(
+              collapsed: _albumsCollapsed,
               child: HorizontalShelf(
+                coverExtent: 144,
+                padding: EdgeInsets.only(left: context.isNarrow ? 28 : 32),
                 height: 240,
                 itemCount: results.albums.length,
                 itemBuilder: (context, i) =>
@@ -265,6 +380,7 @@ class _TrackSearchTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return CommonTrackTile(
       trackId: track.id,
+      isDisliked: track.isDisliked,
       isExplicit: track.isExplicit,
       title: track.title,
       version: track.version,
@@ -318,7 +434,6 @@ class _ArtistSearchCard extends StatelessWidget {
       ),
       coverUrl: artist.coverUrl,
       isCircle: true,
-      size: 140,
       onTap: () => navigateTo(AppSection.artist, artist.id),
     );
   }

@@ -145,6 +145,7 @@ pub async fn toggle_like(ctx: &AppContext, track_id: String) -> bool {
 }
 
 pub async fn toggle_dislike(ctx: &AppContext, track_id: String) {
+    let _mutation = ctx.core.api.like_mutation_lock.lock().await;
     let is_disliked = {
         let state = ctx.audio.state.read().await;
         state.liked.is_disliked(&track_id)
@@ -173,6 +174,8 @@ pub async fn toggle_dislike(ctx: &AppContext, track_id: String) {
         };
         match api_result {
             Ok(_) => {
+                let ids: Vec<String> = state.read().await.liked.snapshot().1.into_iter().collect();
+                let _ = ctx.core.db.lock().await.save_setting("disliked_track_ids", &ids).await;
                 let msg = if is_disliked {
                     crate::audio::commands::AudioMessage::WaveUndislike(track_id)
                 } else {
@@ -182,6 +185,7 @@ pub async fn toggle_dislike(ctx: &AppContext, track_id: String) {
             }
             Err(e) => {
                 tracing::warn!("toggle_dislike API failed, rolling back: {:?}", e);
+                ctx.send_event(crate::api::simple::AppEvent::Error("Не удалось изменить дизлайк. Повторите попытку.".into()));
                 let should_rollback = {
                     let s = state.read().await;
                     s.liked.is_disliked(&track_id) == !is_disliked
@@ -983,8 +987,20 @@ pub async fn liked_tracks_stream(
 }
 
 pub async fn get_disliked_tracks(ctx: &AppContext) -> Result<Vec<SimpleTrackDto>, String> {
+    let mutation = ctx.core.api.like_mutation_lock.lock().await;
     let ids = ctx.core.api.fetch_disliked_ids().await.map_err(|e| e.to_string())?;
-    ctx.audio.state.write().await.liked.replace_disliked_ids(&ids);
+    let changed = {
+        let mut state = ctx.audio.state.write().await;
+        let before = state.liked.snapshot().1;
+        state.liked.replace_disliked_ids(&ids);
+        before != state.liked.snapshot().1
+    };
+    let _ = ctx.core.db.lock().await.save_setting("disliked_track_ids", &ids).await;
+    if changed {
+        ctx.audio.signals.library_changed.send_replace(());
+        ctx.audio.signals.changed.send_replace(());
+    }
+    drop(mutation);
     let mut tracks = build_track_dtos(ctx, ids).await;
     for track in &mut tracks {
         track.is_disliked = true;

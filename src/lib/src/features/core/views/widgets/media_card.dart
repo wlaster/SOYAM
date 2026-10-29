@@ -10,6 +10,7 @@ class CommonMediaCard extends StatefulWidget {
   final String? coverUrl;
   final VoidCallback onTap;
   final double size;
+  final double coverScale;
   final bool isCircle;
   final int? titleMaxLines;
   final EdgeInsetsGeometry contentPadding;
@@ -22,6 +23,7 @@ class CommonMediaCard extends StatefulWidget {
     this.subtitle,
     this.coverUrl,
     this.size = 160,
+    this.coverScale = 1,
     this.isCircle = false,
     this.titleMaxLines = 1,
     this.contentPadding = const EdgeInsets.all(8),
@@ -93,11 +95,15 @@ class _CommonMediaCardState extends State<CommonMediaCard> {
                             duration: const Duration(milliseconds: 200),
                             curve: Curves.easeOutBack,
                             scale: hovered ? 1.05 : 1.0,
-                            child: AppCover(
-                              coverUrl: widget.coverUrl,
-                              size: widget.size - 16,
-                              radius: 16,
-                              circle: widget.isCircle,
+                            child: Transform.scale(
+                              scale: widget.coverScale,
+                              alignment: Alignment.centerLeft,
+                              child: AppCover(
+                                coverUrl: widget.coverUrl,
+                                size: widget.size - 16,
+                                radius: 16,
+                                circle: widget.isCircle,
+                              ),
                             ),
                           ),
                         ),

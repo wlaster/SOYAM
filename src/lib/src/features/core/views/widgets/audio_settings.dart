@@ -310,7 +310,7 @@ class _EqualizerViewState extends State<_EqualizerView> {
     final selected = _selected;
     final editable = selected != null && !selected.builtIn;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -320,7 +320,16 @@ class _EqualizerViewState extends State<_EqualizerView> {
                 child: DropdownButtonFormField<String>(
                   key: ValueKey(_profiles.selectedId),
                   initialValue: _profiles.selectedId,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
                   isExpanded: true,
+                  borderRadius: BorderRadius.circular(12),
+                  dropdownColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest,
                   decoration: const InputDecoration(
                     labelText: 'Профиль эквалайзера',
                     isDense: true,
@@ -360,6 +369,7 @@ class _EqualizerViewState extends State<_EqualizerView> {
               ),
               PopupMenuButton<String>(
                 tooltip: 'Копировать настройки в свой профиль',
+                style: IconButtonTheme.of(context).style,
                 enabled:
                     !_busy &&
                     selected != null &&
@@ -383,6 +393,7 @@ class _EqualizerViewState extends State<_EqualizerView> {
               ),
               PopupMenuButton<String>(
                 tooltip: 'Управление своим профилем',
+                style: IconButtonTheme.of(context).style,
                 enabled: editable && !_busy,
                 onSelected: (action) async {
                   if (action == 'rename') {
