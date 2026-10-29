@@ -406,7 +406,7 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
         final allDownloaded =
             tracks.isNotEmpty &&
             tracks.every((track) => downloadedTracks.contains(track.id));
-        final downloadActionsWidth = allDownloaded ? 112.0 : 56.0;
+        final downloadActionsWidth = allDownloaded ? 112.0 : 48.0;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,6 +419,7 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                 16,
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
                     child: TextField(
@@ -469,7 +470,7 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                   const SizedBox(width: 12),
                   SizedBox(
                     width: downloadActionsWidth,
-                    height: 56,
+                    height: 48,
                     child: SignalBuilder(
                       builder: (context) {
                         // No subscriptions while the tab is hidden.
@@ -497,7 +498,7 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                             icon: const Icon(Icons.delete_sweep_rounded),
                             tooltip: 'Удалить всё из кэша',
                             style: IconButton.styleFrom(
-                              fixedSize: const Size(56, 56),
+                              fixedSize: const Size(48, 48),
                               padding: EdgeInsets.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               shape: RoundedRectangleBorder(
@@ -526,7 +527,7 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                               : const Icon(Icons.download_rounded),
                           tooltip: 'Скачать всё',
                           style: IconButton.styleFrom(
-                            fixedSize: const Size(56, 56),
+                            fixedSize: const Size(48, 48),
                             padding: EdgeInsets.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             shape: RoundedRectangleBorder(
@@ -728,6 +729,22 @@ class _LikedTracksDownloadButton extends StatelessWidget {
           */
         ],
         onSelected: onSelected,
+        triggerBuilder: (toggle) => IconButton(
+          onPressed: isEnabled ? toggle : null,
+          icon: icon,
+          tooltip: tooltip,
+          style: style?.copyWith(
+            overlayColor: WidgetStateProperty.resolveWith(
+              (states) =>
+                  states.contains(WidgetState.hovered) ||
+                      states.contains(WidgetState.pressed)
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.16)
+                  : Colors.transparent,
+            ),
+          ),
+        ),
         child: IgnorePointer(
           child: IconButton(
             onPressed: onPressed,

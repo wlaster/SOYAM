@@ -482,7 +482,7 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                             key: ValueKey('track-like-$id'),
                                             isLiked: liked,
                                             size: 20,
-                                            showBackground: false,
+                                            showBackground: true,
                                             onTap: () {
                                               if (!pending) {
                                                 unawaited(
