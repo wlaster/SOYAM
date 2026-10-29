@@ -203,27 +203,8 @@ class _LibraryViewState extends State<LibraryView>
             isNarrow ? 20 : 40,
             isNarrow ? 8 : 20,
           ),
-          child: Row(
-            children: [
-              const Expanded(child: CommonPageTitle(title: 'Библиотека')),
-              const SizedBox(width: 16),
-              M3EButton.icon(
-                onPressed: () => _showCreatePlaylistDialog(context),
-                icon: const Icon(Icons.add_rounded),
-                label: isNarrow
-                    ? const SizedBox.shrink()
-                    : const Text('Создать плейлист'),
-                style: M3EButtonStyle.outlined,
-                // In icon-only mode the package still inserts the icon-label
-                // gap, which pushes the icon off-center; drop the gap.
-                size: isNarrow
-                    ? M3EButtonSize.fromBase(M3EButtonSize.sm, iconGap: 0)
-                    : M3EButtonSize.md,
-                decoration: M3EButtonDecoration.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ],
+          child: const Row(
+            children: [Expanded(child: CommonPageTitle(title: 'Библиотека'))],
           ),
         ),
         HorizontalScrollFade(
@@ -259,7 +240,7 @@ class _LibraryViewState extends State<LibraryView>
             controller: _tabController,
             children: [
               _LikedTracksTab(searchController: _searchController),
-              const _PlaylistsTab(),
+              _PlaylistsTab(onCreate: () => _showCreatePlaylistDialog(context)),
               const _LikedAlbumsTab(),
               const _LikedArtistsTab(),
               const _DislikedTracksTab(),
@@ -425,7 +406,7 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
         final allDownloaded =
             tracks.isNotEmpty &&
             tracks.every((track) => downloadedTracks.contains(track.id));
-        final downloadActionsWidth = allDownloaded ? 96.0 : 48.0;
+        final downloadActionsWidth = allDownloaded ? 112.0 : 56.0;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,8 +424,12 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                     child: TextField(
                       controller: widget.searchController,
                       onChanged: setLibrarySearchQuery,
-                      style: TextStyle(color: cs.onSurface, fontSize: 14),
+                      style: TextStyle(color: cs.onSurface, fontSize: 16),
                       decoration: InputDecoration(
+                        constraints: const BoxConstraints(
+                          minHeight: 56,
+                          maxHeight: 56,
+                        ),
                         hintText: 'Поиск в любимых треках...',
                         hintStyle: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.24),
@@ -469,14 +454,14 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                             : null,
                         filled: true,
                         fillColor: cs.onSurface.withValues(alpha: 0.05),
-                        isDense: true,
+                        isDense: false,
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderRadius: BorderRadius.circular(999),
                           borderSide: BorderSide.none,
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
-                          vertical: 10,
+                          vertical: 16,
                         ),
                       ),
                     ),
@@ -484,6 +469,7 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                   const SizedBox(width: 12),
                   SizedBox(
                     width: downloadActionsWidth,
+                    height: 56,
                     child: SignalBuilder(
                       builder: (context) {
                         // No subscriptions while the tab is hidden.
@@ -511,6 +497,12 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                             icon: const Icon(Icons.delete_sweep_rounded),
                             tooltip: 'Удалить всё из кэша',
                             style: IconButton.styleFrom(
+                              fixedSize: const Size(56, 56),
+                              padding: EdgeInsets.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
                               backgroundColor: cs.onSurface.withValues(
                                 alpha: 0.05,
                               ),
@@ -534,6 +526,12 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                               : const Icon(Icons.download_rounded),
                           tooltip: 'Скачать всё',
                           style: IconButton.styleFrom(
+                            fixedSize: const Size(56, 56),
+                            padding: EdgeInsets.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                             backgroundColor: cs.onSurface.withValues(
                               alpha: 0.05,
                             ),
@@ -744,7 +742,8 @@ class _LikedTracksDownloadButton extends StatelessWidget {
 }
 
 class _PlaylistsTab extends StatelessWidget {
-  const _PlaylistsTab();
+  final VoidCallback onCreate;
+  const _PlaylistsTab({required this.onCreate});
 
   @override
   Widget build(BuildContext context) {
@@ -755,30 +754,6 @@ class _PlaylistsTab extends StatelessWidget {
       builder: (context) {
         // No subscription while the tab is hidden.
         final playlists = visibleSignal(context, playlistsSignal);
-
-        if (playlists.isEmpty) {
-          return AppRefreshIndicator(
-            onRefresh: refreshPlaylists,
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Text(
-                      'Нет плейлистов',
-                      style: TextStyle(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.38),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
 
         return AppRefreshIndicator(
           onRefresh: refreshPlaylists,
@@ -798,9 +773,44 @@ class _PlaylistsTab extends StatelessWidget {
               crossAxisSpacing: isNarrow ? 16 : 24,
               childAspectRatio: isNarrow ? 0.7 : 0.75,
             ),
-            itemCount: playlists.length,
+            itemCount: playlists.length + 1,
             itemBuilder: (context, index) {
-              final playlist = playlists[index];
+              if (index == 0) {
+                return Column(
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 1,
+                      child: Material(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHigh
+                            .withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(16),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: onCreate,
+                          child: Center(
+                            child: Icon(
+                              Icons.add_rounded,
+                              size: 48,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Создать плейлист',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                );
+              }
+              final playlist = playlists[index - 1];
               return _PlaylistCard(playlist: playlist);
             },
           ),

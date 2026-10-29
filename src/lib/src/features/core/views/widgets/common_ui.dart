@@ -190,7 +190,7 @@ class CommonDetailHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final isNarrow = screenWidth < 600;
+    final isNarrow = screenWidth < 900;
     final scheme = Theme.of(context).colorScheme;
     final onSurface = scheme.onSurface;
     final onSurfaceVariant = scheme.onSurfaceVariant;
@@ -205,7 +205,7 @@ class CommonDetailHeader extends StatelessWidget {
         title,
         textAlign: isNarrow ? TextAlign.center : TextAlign.start,
         style: Theme.of(context).textTheme.displayMedium?.copyWith(
-          fontSize: isNarrow ? 32 : 48,
+          fontSize: screenWidth < 600 ? 28 : (isNarrow ? 34 : 48),
           fontWeight: FontWeight.w900,
           color: onSurface,
           height: 1.05,
@@ -311,7 +311,7 @@ class CommonDetailHeader extends StatelessWidget {
           : Row(
               crossAxisAlignment: isCircle
                   ? CrossAxisAlignment.center
-                  : CrossAxisAlignment.end,
+                  : CrossAxisAlignment.start,
               children: [
                 AppCover(
                   coverUrl: coverUrl,
@@ -321,7 +321,7 @@ class CommonDetailHeader extends StatelessWidget {
                   canExpand: true,
                   heroTag: coverUrl,
                 ),
-                const SizedBox(width: 40),
+                SizedBox(width: screenWidth < 1100 ? 24 : 40),
                 Expanded(child: content),
               ],
             ),

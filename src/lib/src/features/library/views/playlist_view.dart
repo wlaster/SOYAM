@@ -387,6 +387,7 @@ class _PlaylistContentState extends State<_PlaylistContent> {
               controller: widget.searchController,
               style: TextStyle(color: cs.onSurface),
               decoration: InputDecoration(
+                constraints: const BoxConstraints(minHeight: 56, maxHeight: 56),
                 hintText: 'Поиск в плейлисте...',
                 hintStyle: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.24),
@@ -409,12 +410,12 @@ class _PlaylistContentState extends State<_PlaylistContent> {
                 filled: true,
                 fillColor: cs.onSurface.withValues(alpha: 0.05),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  borderRadius: BorderRadius.circular(999),
                   borderSide: BorderSide.none,
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 12,
+                  vertical: 16,
                 ),
               ),
             ),

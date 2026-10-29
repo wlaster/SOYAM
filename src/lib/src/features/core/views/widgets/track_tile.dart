@@ -67,6 +67,7 @@ class CommonTrackTile extends StatefulWidget {
 class _CommonTrackTileState extends State<CommonTrackTile> {
   final ValueNotifier<bool> _isHovered = ValueNotifier(false);
   final ValueNotifier<bool> _isPressed = ValueNotifier(false);
+  final ValueNotifier<bool> _isTitleHovered = ValueNotifier(false);
   final ValueNotifier<bool> _isMenuOpen = ValueNotifier(false);
 
   @override
@@ -74,6 +75,7 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
     _isHovered.dispose();
     _isPressed.dispose();
     _isMenuOpen.dispose();
+    _isTitleHovered.dispose();
     super.dispose();
   }
 
@@ -335,20 +337,39 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                         children: [
                                           Flexible(
                                             child: MouseRegion(
+                                              onEnter: (_) =>
+                                                  _isTitleHovered.value = true,
+                                              onExit: (_) =>
+                                                  _isTitleHovered.value = false,
                                               cursor: widget.onTitleTap != null
                                                   ? SystemMouseCursors.click
                                                   : SystemMouseCursors.basic,
                                               child: GestureDetector(
-                                                behavior: HitTestBehavior.opaque,
+                                                behavior:
+                                                    HitTestBehavior.opaque,
                                                 onTap: widget.onTitleTap,
-                                                child: Text(
-                                                  widget.title,
-                                                  style: trackTitleStyle(
-                                                    context,
-                                                    weight: FontWeight.bold,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
+                                                child: ValueListenableBuilder<bool>(
+                                                  valueListenable:
+                                                      _isTitleHovered,
+                                                  builder: (context, hovered, _) {
+                                                    return Text(
+                                                      widget.title,
+                                                      style: trackTitleStyle(
+                                                        context,
+                                                        weight: FontWeight.bold,
+                                                        decoration:
+                                                            hovered &&
+                                                                widget.onTitleTap !=
+                                                                    null
+                                                            ? TextDecoration
+                                                                  .underline
+                                                            : null,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    );
+                                                  },
                                                 ),
                                               ),
                                             ),

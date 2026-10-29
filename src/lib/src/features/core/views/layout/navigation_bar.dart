@@ -103,7 +103,11 @@ class _FloatingNavBarState extends State<FloatingNavBar>
         // viewPadding stays stable when the keyboard opens.
         final systemBottom = MediaQuery.viewPaddingOf(context).bottom;
 
-        const alpha = 0.5;
+        final blurEnabled = blurEffectsEnabledSignal.value;
+        final useLyricsStyle =
+            currentNavStateSignal.value.section == AppSection.home &&
+            showLyricsSignal.value;
+        final alpha = blurEnabled ? (useLyricsStyle ? 0.66 : 0.72) : 0.88;
 
         final children = [
           if (isDesktop)

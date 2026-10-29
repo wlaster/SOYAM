@@ -8,7 +8,7 @@ TextStyle trackTitleStyle(
 }) => TextStyle(
   fontFamily: 'Google Sans',
   color: Theme.of(context).colorScheme.onSurface,
-  fontSize: 17,
+  fontSize: MediaQuery.sizeOf(context).width < 800 ? 15 : 17,
   fontWeight: weight,
   height: 1.15,
   letterSpacing: -0.4,

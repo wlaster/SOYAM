@@ -255,8 +255,11 @@ class _HomeTrackHeaderState extends State<_HomeTrackHeader> {
                 mainAxisAlignment: widget.isNarrow
                     ? MainAxisAlignment.start
                     : MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  if (meta.isExplicit && !widget.isNarrow)
+                    const ExcludeSemantics(
+                      child: Opacity(opacity: 0, child: ExplicitTrackBadge()),
+                    ),
                   Flexible(
                     flex: 3,
                     child: MouseRegion(

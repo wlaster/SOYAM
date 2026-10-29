@@ -4,7 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/track_tile.dart';
 
 void main() {
-  testWidgets('mouse clicks on title, cover and row start playback once', (
+  testWidgets('title opens album while cover and row start playback', (
     tester,
   ) async {
     var plays = 0;
@@ -49,8 +49,8 @@ void main() {
       kind: PointerDeviceKind.mouse,
     );
     await tester.pumpAndSettle();
-    expect(plays, 3);
-    expect(navigations, 0);
+    expect(plays, 2);
+    expect(navigations, 1);
     expect(find.text('E'), findsOneWidget);
     expect(find.byTooltip('Взрослый контент'), findsOneWidget);
   });

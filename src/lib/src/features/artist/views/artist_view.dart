@@ -290,7 +290,7 @@ class _ArtistViewState extends State<ArtistView> {
             ],
             SliverToBoxAdapter(
               child: CommonSectionTitle(
-                title: 'Популярные треки (${_totalTracks.value})',
+                title: 'Популярные треки',
                 padding: EdgeInsets.fromLTRB(
                   context.horizontalPadding,
                   24,

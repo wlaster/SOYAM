@@ -67,7 +67,7 @@ class _SearchViewState extends State<SearchView> {
             Padding(
               padding: isNarrow
                   ? const EdgeInsets.fromLTRB(20, 16, 20, 8)
-                  : context.viewPadding,
+                  : context.viewPadding.copyWith(top: 40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

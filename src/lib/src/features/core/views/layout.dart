@@ -9,6 +9,7 @@ import 'package:yayma/src/features/album/views/album_view.dart';
 import 'package:yayma/src/features/artist/views/artist_view.dart';
 import 'package:yayma/src/features/auth/views/yandex_id_view.dart';
 import 'package:yayma/src/features/core/providers/navigation_provider.dart';
+import 'package:yayma/src/features/core/providers/visual_effects_provider.dart';
 import 'package:yayma/src/features/core/views/layout/background.dart';
 import 'package:yayma/src/features/core/views/layout/mobile_full_player.dart';
 import 'package:yayma/src/features/core/views/layout/navigation_bar.dart';
@@ -443,17 +444,29 @@ class _FloatingBackButton extends StatelessWidget {
       builder: (context) {
         if (!canGoBackSignal.value) return const SizedBox.shrink();
 
+        final windowSize = MediaQuery.sizeOf(context);
+        final compact = windowSize.width <= 900 || windowSize.height <= 700;
         return Positioned(
-          top: 76,
-          left: 24,
+          top: compact ? 76 : 136,
+          left: compact ? 84 : 20,
           child: IconButton(
             onPressed: goBack,
             style: IconButton.styleFrom(
-              backgroundColor: Color.lerp(
-                Theme.of(context).colorScheme.surfaceContainerHighest,
-                Colors.black,
-                0.4,
-              ),
+              fixedSize: const Size(56, 56),
+              backgroundColor:
+                  Color.lerp(
+                    Theme.of(context).colorScheme.surfaceContainerHighest,
+                    Colors.black,
+                    0.4,
+                  )!.withValues(
+                    alpha: blurEffectsEnabledSignal.value
+                        ? ((currentNavStateSignal.value.section ==
+                                      AppSection.home &&
+                                  showLyricsSignal.value)
+                              ? 0.66
+                              : 0.72)
+                        : 0.88,
+                  ),
               hoverColor: Theme.of(
                 context,
               ).colorScheme.onSurface.withValues(alpha: 0.1),
@@ -518,19 +531,29 @@ class _FloatingRefreshButtonState extends State<_FloatingRefreshButton> {
           return const SizedBox.shrink();
         }
         // Without the back button take its place, otherwise sit below it.
-        final top = canGoBackSignal.value ? 136.0 : 76.0;
+        const top = 76.0;
         return Positioned(
           top: top,
-          left: 24,
+          left: 20,
           child: IconButton(
             onPressed: _spinning ? null : _onRefresh,
             tooltip: 'Обновить',
             style: IconButton.styleFrom(
-              backgroundColor: Color.lerp(
-                Theme.of(context).colorScheme.surfaceContainerHighest,
-                Colors.black,
-                0.4,
-              ),
+              fixedSize: const Size(56, 56),
+              backgroundColor:
+                  Color.lerp(
+                    Theme.of(context).colorScheme.surfaceContainerHighest,
+                    Colors.black,
+                    0.4,
+                  )!.withValues(
+                    alpha: blurEffectsEnabledSignal.value
+                        ? ((currentNavStateSignal.value.section ==
+                                      AppSection.home &&
+                                  showLyricsSignal.value)
+                              ? 0.66
+                              : 0.72)
+                        : 0.88,
+                  ),
               hoverColor: Theme.of(
                 context,
               ).colorScheme.onSurface.withValues(alpha: 0.1),
