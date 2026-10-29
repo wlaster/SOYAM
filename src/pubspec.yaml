@@ -1,6 +1,6 @@
 name: yayma
 description: "SOYAM - Клиент Яндекс Музыки"
-version: 1.2.6+9
+version: 1.2.7+10
 publish_to: 'none'
 
 environment:
