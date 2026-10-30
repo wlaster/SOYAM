@@ -403,7 +403,7 @@ impl AudioSystem {
         for _ in 0..=limit {
             let disliked = self.state.read().await.liked.is_disliked(&track.id);
             if !disliked && (crate::app::settings::ALLOW_ADULT_CONTENT.load(Ordering::Relaxed) || !crate::app::settings::is_adult_track(&track)) {
-                if !crate::app::settings::is_adult_track(&track) {
+                if track.explicit.is_none() || track.storage_dir.is_none() {
                     let api = self.yandex.api.clone();
                     let tx = self.tx.clone();
                     let id = track.id.clone();

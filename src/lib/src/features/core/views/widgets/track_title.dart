@@ -41,3 +41,28 @@ class ExplicitTrackBadge extends StatelessWidget {
     );
   }
 }
+
+class UnavailableTrackBadge extends StatelessWidget {
+  const UnavailableTrackBadge({super.key});
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: 'Недоступен в Яндекс Музыке · внешний источник',
+    child: Container(
+      margin: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: Colors.redAccent.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: const Text(
+        'U',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: Colors.redAccent,
+        ),
+      ),
+    ),
+  );
+}

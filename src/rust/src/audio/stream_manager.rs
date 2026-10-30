@@ -191,12 +191,19 @@ impl StreamManager {
     }
 
     pub async fn create_stream_session(&self, track: &Track) -> Result<PreparedStream> {
+        let resolved = if crate::external_music::enabled() && !crate::external_music::is_external(&track.id) && track.storage_dir.is_none() {
+            self.api.fetch_tracks(vec![track.id.clone()]).await.ok().and_then(|tracks| tracks.into_iter().next())
+        } else { None };
+        let track = resolved.as_ref().unwrap_or(track);
+        if (crate::external_music::is_unavailable(&track.id) || track.available == Some(false)) && !crate::external_music::enabled() {
+            return Err("Включите «Недоступные треки» в настройках".into());
+        }
         let quality = self.api.get_quality();
         {
             let mut cache = self.prewarm_cache.lock();
             cache.ensure_quality(quality);
             if let Some(res) = cache.remove(&track.id) {
-                return Ok(res);
+                if !crate::external_music::is_unavailable(&track.id) { return Ok(res); }
             }
         }
 
@@ -205,7 +212,7 @@ impl StreamManager {
         let progress_clone = progress.clone();
 
         // 1. Check if track is fully downloaded in offline cache
-        if let Some((path, codec)) = self.track_cache.get_track_file(&track.id).await {
+        if !crate::external_music::is_unavailable(&track.id) && let Some((path, codec)) = self.track_cache.get_track_file(&track.id).await {
             let codec_clone = codec.clone();
 
             // Blocking FS stays off the async executor.
@@ -245,14 +252,18 @@ impl StreamManager {
 
         // 2. Fallback to streaming.
         let duration_ms = track.duration.map(|d| d.as_millis() as u64);
-        let (url, mirror_urls, codec) = if let Some(cached) = self.url_cache.get(&track.id, quality) {
+        let (url, mirror_urls, codec) = if track.available == Some(false) || crate::external_music::is_unavailable(&track.id) {
+            let url = crate::external_music::stream_url(track).await.map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;
+            (url, vec![], "mp3".to_string())
+        } else if let Some(cached) = self.url_cache.get(&track.id, quality) {
             cached
         } else {
             let info = self
                 .api
                 .fetch_track_stream_info(track.id.clone(), quality)
-                .await
-                .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e.to_string()))?;
+                .await;
+            match info {
+            Ok(info) => {
             self.url_cache.insert(
                 track.id.clone(),
                 info.url.clone(),
@@ -261,6 +272,24 @@ impl StreamManager {
                 quality,
             );
             (info.url, info.mirror_urls, info.codec)
+            }
+            Err(error) => {
+                // A cached playlist entry can lack availability. Confirm with
+                // Yandex before treating an error as an unavailable recording.
+                let confirmed = if crate::external_music::enabled() {
+                    self.api.fetch_tracks(vec![track.id.clone()]).await.ok()
+                        .and_then(|tracks| tracks.into_iter().next())
+                        .filter(|full| full.available == Some(false))
+                } else { None };
+                if let Some(full) = confirmed {
+                    crate::external_music::note_availability(&full);
+                    let url = crate::external_music::stream_url(&full).await.map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;
+                    (url, vec![], "mp3".to_string())
+                } else {
+                    return Err(error.to_string().into());
+                }
+            }
+            }
         };
 
         let client = self.http_client.clone();

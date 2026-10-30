@@ -44,6 +44,10 @@ pub async fn load_persisted_settings(ctx: &AppContext) {
     }
 
     ALLOW_ADULT_CONTENT.store(parse_setting::<bool>(&settings, "allow_adult_content").unwrap_or(true), std::sync::atomic::Ordering::Relaxed);
+    crate::external_music::ENABLED.store(parse_setting::<bool>(&settings, "unavailable_tracks_enabled").unwrap_or(false), std::sync::atomic::Ordering::Relaxed);
+    if let Some(tracks) = parse_setting::<Vec<crate::external_music::ExternalTrack>>(&settings, "external_music_catalog") {
+        crate::external_music::remember(tracks);
+    }
 
     let vibe_enabled = parse_setting::<bool>(&settings, "vibe_animation_enabled").unwrap_or(true);
     ctx.audio.signals.vibe_enabled.set(vibe_enabled);
@@ -102,7 +106,6 @@ pub(crate) static ALLOW_ADULT_CONTENT: std::sync::atomic::AtomicBool = std::sync
 
 pub(crate) fn is_adult_track(track: &yandex_music::model::track::Track) -> bool {
     track.explicit == Some(true) || track.content_warning.as_deref().is_some_and(|v| v.eq_ignore_ascii_case("explicit"))
-        || track.albums.iter().any(|album| album.explicit == Some(true) || album.content_warning.as_deref().is_some_and(|v| v.eq_ignore_ascii_case("explicit")))
 }
 
 #[cfg(test)]
@@ -118,6 +121,15 @@ mod adult_content_tests {
         track.content_warning = Some("explicit".into());
         assert!(is_adult_track(&track));
         track.content_warning = Some("clean".into());
+        assert!(!is_adult_track(&track));
+    }
+
+    #[test]
+    fn explicit_album_does_not_mark_a_clean_song() {
+        let track = serde_json::from_value(serde_json::json!({
+            "id": "58838214", "realId": "58838214", "title": "Миллионы", "explicit": false,
+            "albums": [{"id": 1, "contentWarning": "explicit", "explicit": true}]
+        })).unwrap();
         assert!(!is_adult_track(&track));
     }
 }

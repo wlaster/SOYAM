@@ -238,6 +238,7 @@ class _TrackInfoState extends State<_TrackInfo> {
                         ),
                       ),
                       if (meta.isExplicit) const ExplicitTrackBadge(),
+                      if (meta.isUnavailable) const UnavailableTrackBadge(),
                       TrackVersionWidget(version: meta.version, fontSize: 12),
                     ],
                   ),

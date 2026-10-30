@@ -348,9 +348,13 @@ class _SearchResultsState extends State<_SearchResults> {
             ),
           ],
           if (results.tracks.isNotEmpty) ...[
-            const SliverToBoxAdapter(child: CommonSectionTitle(title: 'Треки')),
             AppSliverTrackList(
+              availableHeader: const CommonSectionTitle(title: 'Треки'),
               itemCount: results.tracks.length,
+              unavailableIndices: {
+                for (var i = 0; i < results.tracks.length; i++)
+                  if (results.tracks[i].isUnavailable) i,
+              },
               addAutomaticKeepAlives: false,
               padding: EdgeInsets.symmetric(
                 horizontal: context.horizontalPadding,
@@ -382,6 +386,7 @@ class _TrackSearchTile extends StatelessWidget {
       trackId: track.id,
       isDisliked: track.isDisliked,
       isExplicit: track.isExplicit,
+      isUnavailable: track.isUnavailable,
       title: track.title,
       version: track.version,
       artists: track.artists,

@@ -34,11 +34,16 @@ impl LikedCache {
     }
 
     pub fn set_liked_ids(&mut self, ids: Vec<String>) {
-        self.liked_ids = ids
+        // External favourites live only on this device; a Yandex snapshot
+        // cannot contain them and must not erase them.
+        let local: Vec<_> = self.liked_ids.iter()
+            .filter(|id| crate::external_music::is_external(id)).cloned().collect();
+        self.liked_ids = local.into_iter().chain(ids)
             .into_iter()
             .map(|id| id.to_base_id().to_string())
             .collect();
-        self.liked_ids_set = self.liked_ids.iter().cloned().collect();
+        self.liked_ids_set.clear();
+        self.liked_ids.retain(|id| self.liked_ids_set.insert(id.clone()));
     }
 
     pub fn snapshot(&self) -> LikedSnapshot {
@@ -140,6 +145,17 @@ impl LikedCache {
 #[cfg(test)]
 mod server_dislikes_tests {
     use super::LikedCache;
+    #[test]
+    fn server_sync_preserves_local_favourites_and_honours_local_removal() {
+        let mut cache = LikedCache::default();
+        cache.set_liked_ids(vec!["old".into(), "ext-hitmos-1".into()]);
+        cache.apply_liked_tracks(1, vec!["new".into()], vec![]);
+        assert_eq!(cache.ordered_snapshot().0, ["ext-hitmos-1", "new"]);
+        assert!(!cache.is_liked("old"));
+        cache.set_like_status("ext-hitmos-1", false);
+        cache.set_liked_ids(vec!["new".into()]);
+        assert!(!cache.is_liked("ext-hitmos-1"));
+    }
     #[test]
     fn server_snapshot_replaces_stale_ids_and_preserves_likes() {
         let mut cache = LikedCache::default();

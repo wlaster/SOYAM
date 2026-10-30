@@ -1048,7 +1048,7 @@ fn filter_wave_likes(
     use crate::util::track::CleanId;
     let include_likes = seeds.iter().any(|seed| seed == "personal:collection");
     tracks.into_iter().filter(|track| {
-        !liked.is_disliked(&track.id) && (include_likes ||
+        track.available != Some(false) && !crate::external_music::is_unavailable(&track.id) && !liked.is_disliked(&track.id) && (include_likes ||
             current.is_some_and(|id| id.to_base_id() == track.id.to_base_id()) || !liked.is_liked(&track.id))
     }).collect()
 }

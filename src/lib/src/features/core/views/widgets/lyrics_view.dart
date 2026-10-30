@@ -283,39 +283,41 @@ class _LyricsWidgetState extends State<LyricsWidget> {
                   final lines = result.items;
                   if (lines.isEmpty) return _emptyLyrics();
                   if (!result.isSynced) {
-                    return ShaderMask(
-                      shaderCallback: (rect) => const LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.white,
-                          Colors.white,
-                          Colors.transparent,
-                        ],
-                        stops: [0, 0.12, 0.72, 1],
-                      ).createShader(rect),
-                      blendMode: BlendMode.dstIn,
-                      child: ListView.builder(
-                        key: PageStorageKey(
-                          '${widget.trackId}_${result.providerName}_plain',
-                        ),
-                        primary: false,
-                        padding: EdgeInsets.fromLTRB(
-                          24,
-                          Platform.isWindows ? 32 : 8,
-                          24,
-                          40,
-                        ),
-                        itemCount: lines.length,
-                        itemBuilder: (context, index) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            (lines[index] as LyricLine).text,
-                            textAlign: TextAlign.center,
-                            style: _lyricTextStyle(
-                              color: Theme.of(context).colorScheme.onSurface,
-                              fontWeight: FontWeight.w800,
+                    return LayoutBuilder(
+                      builder: (context, constraints) => ShaderMask(
+                        shaderCallback: (rect) => const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.white,
+                            Colors.white,
+                            Colors.transparent,
+                          ],
+                          stops: [0, 0.12, 0.72, 1],
+                        ).createShader(rect),
+                        blendMode: BlendMode.dstIn,
+                        child: ListView.builder(
+                          key: PageStorageKey(
+                            '${widget.trackId}_${result.providerName}_plain',
+                          ),
+                          primary: false,
+                          padding: EdgeInsets.fromLTRB(
+                            24,
+                            Platform.isWindows ? 32 : 8,
+                            24,
+                            constraints.maxHeight * .5,
+                          ),
+                          itemCount: lines.length,
+                          itemBuilder: (context, index) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text(
+                              (lines[index] as LyricLine).text,
+                              textAlign: TextAlign.center,
+                              style: _lyricTextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
                         ),

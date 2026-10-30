@@ -8,6 +8,15 @@ use crate::util::track::{CleanId, like_entity_id};
 use foldhash::HashMapExt;
 use futures::StreamExt;
 
+fn reject_external_server_action(ctx: &AppContext, id: &str) -> bool {
+    if !crate::external_music::is_external(id) { return false; }
+    ctx.send_event(crate::api::simple::AppEvent::Notification(
+        "Внешний источник".into(),
+        "Этой записи нет в каталоге Яндекса. Добавление в его плейлисты недоступно.".into(),
+    ));
+    true
+}
+
 /// Resolves the full `"id:album"` entity id for like/unlike HTTP requests.
 ///
 /// Cache/DB/Wave keep using the base id; only the likes HTTP API needs the
@@ -40,6 +49,9 @@ pub async fn track_is_liked(ctx: &AppContext, track_id: String) -> bool {
 /// optimistic state is rolled back and `false` is returned so the caller can
 /// revert its own optimistic UI.
 pub async fn toggle_like(ctx: &AppContext, track_id: String) -> bool {
+    if crate::external_music::is_external(&track_id) {
+        return toggle_local_like(ctx, &track_id).await;
+    }
     let _mutation = ctx.core.api.like_mutation_lock.lock().await;
     let is_liked = {
         let state = ctx.audio.state.read().await;
@@ -144,7 +156,41 @@ pub async fn toggle_like(ctx: &AppContext, track_id: String) -> bool {
     confirmed
 }
 
+/// External IDs cannot be sent to Yandex. Save their favourites and metadata
+/// locally before publishing the new state, using the same mutation lock as sync.
+async fn toggle_local_like(ctx: &AppContext, track_id: &str) -> bool {
+    let _mutation = ctx.core.api.like_mutation_lock.lock().await;
+    let mut liked = ctx.audio.state.read().await.liked.clone();
+    let add = !liked.is_liked(track_id);
+    liked.set_like_status(track_id, add);
+    let result = async {
+        let mut db = ctx.core.db.lock().await;
+        if add {
+            let track = crate::external_music::lookup(track_id)
+                .ok_or_else(|| "Метаданные трека не найдены".to_string())?;
+            db.upsert_track_metadata(yandex_track_to_metadata(track)).await
+                .map_err(|e| e.to_string())?;
+            db.save_setting("external_music_catalog", &crate::external_music::snapshot()).await
+                .map_err(|e| e.to_string())?;
+        }
+        db.save_liked_tracks(&liked.ordered_snapshot().0).await.map_err(|e| e.to_string())
+    }.await;
+    if let Err(error) = result {
+        tracing::warn!("Local favourite update failed: {error}");
+        ctx.send_event(crate::api::simple::AppEvent::Notification(
+            "Любимое".into(), "Не удалось сохранить избранное".into(),
+        ));
+        return false;
+    }
+    // Preserve unrelated album/artist/dislike changes made during the DB await.
+    ctx.audio.state.write().await.liked.set_like_status(track_id, add);
+    ctx.audio.signals.library_changed.send_replace(());
+    ctx.audio.signals.changed.send_replace(());
+    true
+}
+
 pub async fn toggle_dislike(ctx: &AppContext, track_id: String) {
+    if reject_external_server_action(ctx, &track_id) { return; }
     let _mutation = ctx.core.api.like_mutation_lock.lock().await;
     let is_disliked = {
         let state = ctx.audio.state.read().await;
@@ -507,6 +553,7 @@ pub async fn add_track_to_playlist(
     track_id: String,
     album_id: Option<String>,
 ) -> bool {
+    if reject_external_server_action(ctx, &track_id) { return false; }
     let ok = ctx
         .core
         .api
@@ -699,6 +746,7 @@ fn metadata_to_dto(
     is_liked: bool,
     is_disliked: bool,
 ) -> SimpleTrackDto {
+    let is_unavailable = crate::external_music::is_unavailable(&m.id);
     SimpleTrackDto {
         id: m.id,
         title: m.title,
@@ -711,6 +759,7 @@ fn metadata_to_dto(
         is_liked,
         is_disliked,
         is_explicit: m.is_explicit.unwrap_or(false),
+        is_unavailable,
     }
 }
 

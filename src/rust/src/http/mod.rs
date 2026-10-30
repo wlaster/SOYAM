@@ -1,5 +1,6 @@
 mod recommendations;
 use crate::api::models::AudioQuality;
+use crate::util::track::CleanId;
 use chrono::Utc;
 use parking_lot::RwLock;
 use serde_json;
@@ -463,8 +464,21 @@ impl ApiService {
     }
 
     pub async fn fetch_tracks(&self, track_ids: Vec<String>) -> Result<Vec<Track>> {
-        let opts = GetTracksOptions::new(track_ids);
-        Ok(self.client.get_tracks(&opts).await?)
+        let (external, yandex): (Vec<_>, Vec<_>) = track_ids.into_iter().partition(|id| crate::external_music::is_external(id));
+        let mut tracks = if yandex.is_empty() { Vec::new() } else {
+            let opts = GetTracksOptions::new(yandex);
+            self.client.get_tracks(&opts).await?
+        };
+        if crate::external_music::enabled() {
+            tracks.extend(external.iter().filter_map(|id| crate::external_music::lookup(id)));
+        }
+        for track in &mut tracks {
+            crate::external_music::note_availability(track);
+            if crate::external_music::enabled() && let Some(original) = track.substituted.take() {
+                *track = *original;
+            }
+        }
+        Ok(tracks)
     }
 
     pub async fn fetch_file_info_batch(
@@ -536,6 +550,11 @@ impl ApiService {
     }
 
     pub async fn fetch_track_stream_info(&self, track_id: String, quality: AudioQuality) -> Result<TrackStreamInfo> {
+        if crate::external_music::is_external(&track_id) {
+            let track = crate::external_music::lookup(&track_id).ok_or("Внешний трек не найден в локальном каталоге")?;
+            let url = crate::external_music::stream_url(&track).await?;
+            return Ok(TrackStreamInfo { url, mirror_urls: vec![], codec: "mp3".into() });
+        }
         let opts = GetFileInfoOptions::new(track_id.clone()).quality(Self::map_quality(quality));
         let mut last_error = None;
         let mut info = None;
@@ -653,12 +672,14 @@ impl ApiService {
         track_id: String,
         format: LyricsFormat,
     ) -> Result<Option<String>> {
-        let opts = GetLyricsOptions::new(track_id, format);
-        match self.client.get_lyrics(&opts).await {
+        let opts = GetLyricsOptions::new(track_id.to_base_id(), format);
+        // The crate signs lyrics with its default client key, too. Sending
+        // that signature with the desktop identity produces Invalid Sign.
+        match self.file_info_client.get_lyrics(&opts).await {
             Ok(lyrics) => {
                 let url = lyrics.download_url;
                 let text = self
-                    .client
+                    .file_info_client
                     .inner
                     .get(url)
                     .send()
@@ -668,7 +689,10 @@ impl ApiService {
                     .await?;
                 Ok(Some(text))
             }
-            Err(_) => Ok(None),
+            Err(error) => {
+                tracing::warn!("Yandex lyrics request failed: {error}");
+                Ok(None)
+            }
         }
     }
 
@@ -1068,6 +1092,23 @@ fn collateral_unlikes(before: &[String], after: &[String], removed: &str) -> Vec
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[tokio::test]
+    #[ignore = "saved local Yandex authorization and internet; read-only"]
+    async fn live_reported_lyrics_and_clean_track() {
+        let path = std::path::PathBuf::from(std::env::var("APPDATA").unwrap())
+            .join("darkplayoff.yayma.app/yayma/yamusic_v2.db");
+        let db = rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let raw: String = db.query_row("SELECT value FROM app_settings WHERE key='auth_token'", [], |r| r.get(0)).unwrap();
+        let (token, uid): (String, u64) = serde_json::from_str(&raw).unwrap();
+        drop(db);
+        let api = ApiService::new(token, Some(uid)).await.unwrap();
+        let text = api.fetch_lyrics("23172846".into(), LyricsFormat::LRC).await.unwrap().unwrap();
+        let lines = crate::lyrics::lrc::parse(&text);
+        assert!(lines.iter().any(|l| l.start >= 0.0 && !l.text.is_empty()));
+        let tracks = api.fetch_tracks(vec!["58838214".into()]).await.unwrap();
+        assert!(!crate::app::settings::is_adult_track(&tracks[0]));
+    }
 
     #[test]
     fn unlike_restores_other_versions_but_never_requested_track() {

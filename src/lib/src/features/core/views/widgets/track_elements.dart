@@ -63,9 +63,14 @@ class ArtistNamesWidget extends StatelessWidget {
     this.onArtistTap,
   });
 
-  void _openArtist(String artistId) => onArtistTap != null
-      ? onArtistTap!(artistId)
-      : navigateTo(AppSection.artist, artistId);
+  void _openArtist(String artistId) {
+    if (artistId.isEmpty) return;
+    if (onArtistTap != null) {
+      onArtistTap!(artistId);
+    } else {
+      navigateTo(AppSection.artist, artistId);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

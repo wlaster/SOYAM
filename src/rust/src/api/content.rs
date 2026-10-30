@@ -18,6 +18,20 @@ use tokio::sync::Mutex;
 
 const MAX_CONCURRENT_DOWNLOADS: usize = 3;
 static BULK_DOWNLOAD_QUEUE: OnceLock<Mutex<()>> = OnceLock::new();
+
+pub async fn get_unavailable_tracks_enabled(ctx: &AppContext) -> bool {
+    let _ = ctx;
+    crate::external_music::enabled()
+}
+
+pub async fn set_unavailable_tracks_enabled(ctx: &AppContext, enabled: bool) -> Result<(), String> {
+    ctx.core.db.lock().await.save_setting("unavailable_tracks_enabled", &enabled).await.map_err(|e| e.to_string())?;
+    crate::external_music::ENABLED.store(enabled, std::sync::atomic::Ordering::Relaxed);
+    if !enabled && ctx.audio.signals.current_track.get().as_ref().is_some_and(|t| crate::external_music::is_unavailable(&t.id)) {
+        let _ = ctx.audio.tx.send(crate::audio::commands::AudioMessage::Stop).await;
+    }
+    Ok(())
+}
 static DOWNLOAD_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
     crate::util::tls::builder()
         .http1_only()
@@ -127,12 +141,27 @@ macro_rules! map_results {
 
 pub async fn search(ctx: &AppContext, query: String) -> Option<SearchResultsDto> {
     let (liked, disliked) = get_liked_snapshot(ctx).await;
-    let results = ctx.core.api.search(&query).await.ok()?;
+    let (results, mut external) = tokio::join!(ctx.core.api.search(&query), crate::external_music::search(&query));
+    let canonical_artist = results.as_ref().ok().and_then(|r| r.artists.as_ref())
+        .and_then(|artists| artists.results.iter().filter_map(|a| a.name.as_deref())
+            .find(|name| crate::external_music::artist_alias(&query, name))).map(str::to_owned);
+    if let Some(name) = canonical_artist { external.extend(crate::external_music::search(&name).await); }
+    let mut tracks: Vec<SimpleTrackDto> = results.as_ref().ok().and_then(|r| r.tracks.as_ref())
+        .map(|rows| rows.results.iter().map(|t| SimpleTrackDto::from_yandex(t, &liked, &disliked)).collect()).unwrap_or_default();
+    for entry in external {
+        let duplicate = tracks.iter().any(|t| t.id == entry.id || crate::external_music::same_recording(t, &entry));
+        if !duplicate && let Some(track) = crate::external_music::lookup(&entry.id) {
+            tracks.push(SimpleTrackDto::from_yandex(&track, &liked, &disliked));
+        }
+    }
+    if crate::external_music::enabled() {
+        crate::external_music::prioritize_studio(&mut tracks, &query);
+        let _ = ctx.core.db.lock().await.save_setting("external_music_catalog", &crate::external_music::snapshot()).await;
+    }
+    let results = match results { Ok(r) => r, Err(_) => return Some(SearchResultsDto { tracks, albums: vec![], artists: vec![], playlists: vec![] }) };
 
     Some(SearchResultsDto {
-        tracks: map_results!(results.tracks, |t| {
-            SimpleTrackDto::from_yandex(&t, &liked, &disliked)
-        }),
+        tracks,
         albums: map_results!(results.albums, SimpleAlbumDto::from_yandex),
         artists: map_results!(results.artists, SimpleArtistDto::from_yandex),
         playlists: map_results!(results.playlists, SimplePlaylistDto::from_yandex),
@@ -558,10 +587,23 @@ pub async fn get_artist_details(
     let ((mut artist, monthly_listeners), (tracks, pager)) = (artist_res.ok()?, tracks_res.ok()?);
     if page == 0 { crate::api::artist_stats::remember_artist_page(&artist_id, &artist, &tracks); }
 
-    let mapped_tracks = tracks
+    let mut mapped_tracks: Vec<SimpleTrackDto> = tracks
         .into_iter()
         .map(|t| SimpleTrackDto::from_yandex(&t, &liked, &disliked))
         .collect();
+
+    if page == 0 && crate::external_music::enabled() {
+        let name = artist.name.as_deref().unwrap_or("");
+        for entry in crate::external_music::search(name).await {
+            if !crate::external_music::contains_artist(&entry.artist, name) { continue; }
+            if mapped_tracks.iter().any(|t| t.id == entry.id || crate::external_music::same_recording(t, &entry)) { continue; }
+            if let Some(track) = crate::external_music::lookup(&entry.id) {
+                mapped_tracks.push(SimpleTrackDto::from_yandex(&track, &liked, &disliked));
+            }
+        }
+        let _ = ctx.core.db.lock().await.save_setting("external_music_catalog", &crate::external_music::snapshot()).await;
+        crate::external_music::prioritize_studio(&mut mapped_tracks, name);
+    }
 
     // Albums are only needed for the first page; subsequent pages just append tracks.
     let albums = if page == 0 {
@@ -655,14 +697,24 @@ pub async fn fetch_wave_stations(ctx: &AppContext) -> Vec<StationCategoryDto> {
     let mut cats: Vec<StationCategoryDto> = grouped
         .into_iter()
         .map(|(k, mut v)| {
-            let title = if k == "Моя волна" {
-                k
-            } else {
-                let mut chars = k.chars();
-                chars.next().map_or(String::new(), |f| {
-                    f.to_uppercase().collect::<String>() + chars.as_str()
-                })
-            };
+            let title = match k.as_str() {
+                "Моя волна" | "user" => "Моя волна",
+                "genre" => "Жанры",
+                "micro-genre" => "Поджанры",
+                "mood" => "Настроения",
+                "activity" => "Занятия",
+                "epoch" => "Эпохи",
+                "tempo" => "Темп",
+                "author" => "Авторские станции",
+                "editorial" => "Выбор редакции",
+                "personal" => "Персональные станции",
+                "mix-by-genre" => "Миксы по жанрам",
+                "mix-by-micro-genre" => "Миксы по поджанрам",
+                "mix-by-activity" => "Миксы по занятиям",
+                "mix-by-tempo" => "Миксы по темпу",
+                "mix-by-mood" => "Миксы по настроению",
+                _ => "Другие станции",
+            }.to_string();
             v.sort_by(|a, b| a.label.cmp(&b.label));
             StationCategoryDto { title, items: v }
         })

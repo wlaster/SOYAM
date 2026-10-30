@@ -26,7 +26,8 @@ void main() {
         durationMs: 1000,
         isLiked: false,
         isDisliked: false,
-    isExplicit: false,
+        isExplicit: false,
+        isUnavailable: false,
       ),
     );
     addTearDown(() => playerStateSignal.value = null);

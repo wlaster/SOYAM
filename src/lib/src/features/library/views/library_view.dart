@@ -603,6 +603,10 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                     : AppTrackList.builder(
                         physics: const AlwaysScrollableScrollPhysics(),
                         itemCount: tracks.length,
+                        unavailableIndices: {
+                          for (var i = 0; i < tracks.length; i++)
+                            if (tracks[i].isUnavailable) i,
+                        },
                         addAutomaticKeepAlives: false,
                         cacheExtent: 500,
                         listPadding: const EdgeInsets.only(bottom: 140),
@@ -620,6 +624,7 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                             trackId: track.id,
                             isDisliked: track.isDisliked,
                             isExplicit: track.isExplicit,
+                            isUnavailable: track.isUnavailable,
                             title: track.title,
                             version: track.version,
                             artists: track.artists,
@@ -1212,6 +1217,7 @@ class _DislikedTracksTab extends StatelessWidget {
             trackId: track.id,
             isDisliked: track.isDisliked,
             isExplicit: track.isExplicit,
+            isUnavailable: track.isUnavailable,
             title: track.title,
             version: track.version,
             artists: track.artists,

@@ -103,7 +103,8 @@ pub async fn resolve_single_track_offline_or_remote(
     tx: mpsc::Sender<AudioMessage>,
     generation: u64,
 ) {
-    let local_ctx = if stream_manager.is_track_offline(&tid).await {
+    let local_ctx = if matches!(&source, SingleTrackSource::Liked)
+        || stream_manager.is_track_offline(&tid).await {
         match &source {
             SingleTrackSource::Liked => match &state {
                 Some(s) => build_local_liked_context(&db, s, &tid).await,
@@ -118,11 +119,11 @@ pub async fn resolve_single_track_offline_or_remote(
     };
     if let Some((tracks, index)) = local_ctx {
         let _ = tx
-            .send(AudioMessage::LoadContext(
+            .send(AudioMessage::ContextFetched { generation, result: Ok((
                 PlaybackContext::Standalone,
                 tracks,
                 index,
-            ))
+            )) })
             .await;
         return;
     }

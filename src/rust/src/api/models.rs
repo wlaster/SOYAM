@@ -152,6 +152,8 @@ pub struct SimpleTrackDto {
     pub is_disliked: bool,
     #[serde(default)]
     pub is_explicit: bool,
+    #[serde(default)]
+    pub is_unavailable: bool,
 }
 
 #[flutter_rust_bridge::frb(ignore)]
@@ -161,6 +163,9 @@ impl SimpleTrackDto {
         liked_ids: &std::collections::HashSet<String, S>,
         disliked_ids: &std::collections::HashSet<String, S>,
     ) -> Self {
+        crate::external_music::note_availability(t);
+        let t = t.substituted.as_deref().unwrap_or(t);
+        crate::external_music::note_availability(t);
         let track_id_base = t.id.to_base_id();
         let (album_title, album_id) = t
             .albums
@@ -180,6 +185,7 @@ impl SimpleTrackDto {
             is_liked: liked_ids.contains(track_id_base),
             is_disliked: disliked_ids.contains(track_id_base),
             is_explicit: crate::app::settings::is_adult_track(t),
+            is_unavailable: crate::external_music::is_unavailable(&t.id),
         }
     }
 
@@ -188,7 +194,11 @@ impl SimpleTrackDto {
         liked_ids: &std::collections::HashSet<String, S>,
         disliked_ids: &std::collections::HashSet<String, S>,
     ) -> Self {
+        crate::external_music::note_availability(&t);
+        if let Some(original) = t.substituted.take() { t = *original; }
         let is_explicit = crate::app::settings::is_adult_track(&t);
+        crate::external_music::note_availability(&t);
+        let is_unavailable = crate::external_music::is_unavailable(&t.id);
         let is_liked = liked_ids.contains(t.id.to_base_id());
         let is_disliked = disliked_ids.contains(t.id.to_base_id());
         let cover_url = format_cover(get_any_cover(&t), COVER_SIZE_MEDIUM);
@@ -217,6 +227,7 @@ impl SimpleTrackDto {
             is_liked,
             is_disliked,
             is_explicit,
+            is_unavailable,
         }
     }
 }

@@ -27,6 +27,7 @@ PlaybackState state({
     isLiked: false,
     isDisliked: false,
     isExplicit: false,
+    isUnavailable: false,
   ),
 );
 

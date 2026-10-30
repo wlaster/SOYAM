@@ -42,7 +42,9 @@ pub fn track_from_metadata(m: &crate::storage::db::TrackMetadata) -> Track {
     Track {
         id: m.id.clone(),
         title: Some(m.title.clone()),
-        available: Some(true),
+        // The metadata cache does not store availability. An unknown value
+        // must not overwrite a confirmed server-side substitution.
+        available: if crate::external_music::is_unavailable(&m.id) { Some(false) } else { None },
         artists,
         albums: if m.album_id.is_some() || m.album.is_some() {
             serde_json::from_value(serde_json::json!({

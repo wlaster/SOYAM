@@ -129,6 +129,15 @@ impl AppDatabase {
             // Phase 3: merge the stashed leftovers into the fresh schema.
             merge_foreign_tables(&conn);
 
+            // Old cached E flags also inherited the album's warning. Refresh
+            // those flags once; keep all other metadata and downloaded audio.
+            if !conn.query_row("SELECT EXISTS(SELECT 1 FROM app_settings WHERE key = 'track_explicit_only_v1')", [], |r| r.get::<_, bool>(0))? {
+                conn.execute_batch("BEGIN;
+                    UPDATE track_metadata SET is_explicit = NULL;
+                    INSERT INTO app_settings(key, value) VALUES ('track_explicit_only_v1', 'true');
+                    COMMIT;")?;
+            }
+
             let mut db = Self { conn };
             db.import_liked_from_settings();
             Ok(db)
@@ -648,6 +657,14 @@ mod explicit_cache_hotfix_tests {
         let rows = db.get_track_metadata(&["11".into()]).await.unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].is_explicit, Some(true));
+        drop(db);
+
+        // Simulate an existing installation whose E cache predates the fix.
+        let conn = Connection::open(path.join("yamusic_v2.db")).unwrap();
+        conn.execute("DELETE FROM app_settings WHERE key='track_explicit_only_v1'", []).unwrap();
+        drop(conn);
+        let mut db = AppDatabase::init(Some(path.clone())).await.unwrap();
+        assert_eq!(db.get_track_metadata(&["11".into()]).await.unwrap()[0].is_explicit, None);
         drop(db);
         std::fs::remove_dir_all(path).unwrap();
     }

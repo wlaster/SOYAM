@@ -77,7 +77,8 @@ class _ArtistViewState extends State<ArtistView> {
     if (_scrollController.position.pixels >=
             _scrollController.position.maxScrollExtent - 500 &&
         !_isLoading.value &&
-        _tracks.value.length < _totalTracks.value) {
+        _tracks.value.where((track) => !track.id.startsWith('ext-')).length <
+            _totalTracks.value) {
       unawaited(_loadMore());
     }
   }
@@ -290,8 +291,8 @@ class _ArtistViewState extends State<ArtistView> {
                 ),
               ),
             ],
-            SliverToBoxAdapter(
-              child: CommonSectionTitle(
+            AppSliverTrackList(
+              availableHeader: CommonSectionTitle(
                 title: 'Популярные треки',
                 padding: EdgeInsets.fromLTRB(
                   context.horizontalPadding,
@@ -300,9 +301,11 @@ class _ArtistViewState extends State<ArtistView> {
                   16,
                 ),
               ),
-            ),
-            AppSliverTrackList(
               itemCount: tracks.length,
+              unavailableIndices: {
+                for (var i = 0; i < tracks.length; i++)
+                  if (tracks[i].isUnavailable) i,
+              },
               addAutomaticKeepAlives: false,
               padding: EdgeInsets.symmetric(
                 horizontal: context.horizontalPadding,
@@ -314,6 +317,7 @@ class _ArtistViewState extends State<ArtistView> {
                   trackId: track.id,
                   isDisliked: track.isDisliked,
                   isExplicit: track.isExplicit,
+                  isUnavailable: track.isUnavailable,
                   title: track.title,
                   version: track.version,
                   artists: track.artists,

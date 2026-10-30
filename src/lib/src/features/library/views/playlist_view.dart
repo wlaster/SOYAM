@@ -437,84 +437,84 @@ class _PlaylistContentState extends State<_PlaylistContent> {
               ),
             ),
           )
-        else if (searchActive)
+        else
           AppSliverTrackList(
             itemCount: _localTracks.length,
+            unavailableIndices: {
+              for (var i = 0; i < _localTracks.length; i++)
+                if (_localTracks[i].isUnavailable) i,
+            },
             addAutomaticKeepAlives: false,
             padding: EdgeInsets.symmetric(
               horizontal: context.horizontalPadding,
               vertical: 4,
             ),
-            itemBuilder: (context, index) {
-              final track = _localTracks[index];
-              return _TrackTile(
-                track: track,
-                queue: _localTracks,
-                index: index,
-                playlist: widget.playlist,
-                onRemove: () async {
-                  final success = await removeTrackFromPlaylistAction(
-                    widget.playlist.kind,
-                    track.id,
-                    track.albumId,
-                  );
-                  if (success) unawaited(widget.refresh());
-                },
-              );
-            },
-          )
-        else
-          SliverPadding(
-            padding: EdgeInsets.symmetric(
-              horizontal: context.horizontalPadding,
-            ),
-            sliver: SliverReorderableList(
-              itemBuilder: (context, index) {
-                final track = _localTracks[index];
-                return KeyedSubtree(
-                  key: ValueKey('${track.id}_$index'),
-                  child: _TrackTile(
-                    track: track,
-                    queue: _localTracks,
-                    index: index,
-                    playlist: widget.playlist,
-                    dragEnabled: true,
-                    onRemove: () async {
-                      final success = await removeTrackFromPlaylistAction(
-                        widget.playlist.kind,
-                        track.id,
-                        track.albumId,
-                      );
-                      if (success) unawaited(widget.refresh());
-                    },
-                  ),
-                );
-              },
-              itemCount: _localTracks.length,
-              onReorderItem: (oldIndex, originalNewIndex) async {
-                var newIndex = originalNewIndex;
-                setState(() {
-                  if (newIndex > oldIndex) newIndex -= 1;
-                  final item = _localTracks.removeAt(oldIndex);
-                  _localTracks.insert(newIndex, item);
-                });
-
-                final track = _localTracks[newIndex];
-                final success = await moveTrackInPlaylistAction(
-                  widget.playlist.kind,
-                  oldIndex,
-                  newIndex,
-                  track.id,
-                  track.albumId,
-                );
-
-                if (!success) {
-                  unawaited(widget.refresh());
-                }
-              },
-            ),
+            itemBuilder: _playlistRow,
+            availableSliver: searchActive
+                ? null
+                : _availableReorderableList(context),
           ),
       ],
+    );
+  }
+
+  Widget _playlistRow(BuildContext context, int index, {int? dragIndex}) {
+    final track = _localTracks[index];
+    return _TrackTile(
+      track: track,
+      queue: _localTracks,
+      index: dragIndex ?? index,
+      playlist: widget.playlist,
+      dragEnabled: dragIndex != null,
+      onRemove: () async {
+        final success = await removeTrackFromPlaylistAction(
+          widget.playlist.kind,
+          track.id,
+          track.albumId,
+        );
+        if (success) unawaited(widget.refresh());
+      },
+    );
+  }
+
+  Widget _availableReorderableList(BuildContext context) {
+    final indices = [
+      for (var i = 0; i < _localTracks.length; i++)
+        if (!_localTracks[i].isUnavailable) i,
+    ];
+    return SliverPadding(
+      padding: EdgeInsets.symmetric(horizontal: context.horizontalPadding),
+      sliver: SliverReorderableList(
+        itemCount: indices.length,
+        itemBuilder: (context, index) => KeyedSubtree(
+          key: ValueKey('${_localTracks[indices[index]].id}_${indices[index]}'),
+          child: _playlistRow(context, indices[index], dragIndex: index),
+        ),
+        onReorderItem: (oldIndex, originalNewIndex) async {
+          if (oldIndex == originalNewIndex) return;
+          final rawOldIndex = indices[oldIndex];
+          // onReorderItem already accounts for removal in the visible list.
+          // Convert its insertion point back to the full playlist indices.
+          final remaining = List<int>.of(indices)..removeAt(oldIndex);
+          var rawNewIndex = originalNewIndex >= remaining.length
+              ? remaining.last + 1
+              : remaining[originalNewIndex];
+          setState(() {
+            if (rawNewIndex > rawOldIndex) rawNewIndex -= 1;
+            final item = _localTracks.removeAt(rawOldIndex);
+            _localTracks.insert(rawNewIndex, item);
+          });
+          final track = _localTracks[rawNewIndex];
+          final success = await moveTrackInPlaylistAction(
+            widget.playlist.kind,
+            rawOldIndex,
+            rawNewIndex,
+            track.id,
+            track.albumId,
+          );
+          if (!success) unawaited(widget.refresh());
+        },
+      ),
     );
   }
 
@@ -633,6 +633,7 @@ class _TrackTile extends StatelessWidget {
       trackId: track.id,
       isDisliked: track.isDisliked,
       isExplicit: track.isExplicit,
+      isUnavailable: track.isUnavailable,
       title: track.title,
       version: track.version,
       artists: track.artists,

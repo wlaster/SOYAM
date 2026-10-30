@@ -316,6 +316,10 @@ class _AlbumViewState extends State<AlbumView> {
                   slivers: [
                     AppSliverTrackList(
                       itemCount: albumData.tracks.length,
+                      unavailableIndices: {
+                        for (var i = 0; i < albumData.tracks.length; i++)
+                          if (albumData.tracks[i].isUnavailable) i,
+                      },
                       addAutomaticKeepAlives: false,
                       padding: EdgeInsets.symmetric(
                         horizontal: context.horizontalPadding,
@@ -327,6 +331,7 @@ class _AlbumViewState extends State<AlbumView> {
                           trackId: track.id,
                           isDisliked: track.isDisliked,
                           isExplicit: track.isExplicit,
+                          isUnavailable: track.isUnavailable,
                           replaceLeadingWhenPlaying: true,
                           title: track.title,
                           version: track.version,

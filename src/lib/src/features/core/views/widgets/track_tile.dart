@@ -23,6 +23,7 @@ class CommonTrackTile extends StatefulWidget {
   final bool isLiked;
   final bool isDisliked;
   final bool isExplicit;
+  final bool isUnavailable;
   final bool replaceLeadingWhenPlaying;
   final String title;
   final String? version;
@@ -49,6 +50,7 @@ class CommonTrackTile extends StatefulWidget {
     this.isLiked = false,
     this.isDisliked = false,
     this.isExplicit = false,
+    this.isUnavailable = false,
     this.replaceLeadingWhenPlaying = false,
     this.version,
     this.leading,
@@ -438,6 +440,8 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                           ),
                                           if (widget.isExplicit)
                                             const ExplicitTrackBadge(),
+                                          if (widget.isUnavailable)
+                                            const UnavailableTrackBadge(),
                                           TrackVersionWidget(
                                             version: widget.version,
                                             fontSize: isNarrow ? 12 : 14,

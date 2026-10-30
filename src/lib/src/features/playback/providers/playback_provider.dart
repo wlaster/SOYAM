@@ -251,6 +251,7 @@ final FlutterComputed<
     String? albumId,
     String? codec,
     bool isExplicit,
+    bool isUnavailable,
   })
 >
 trackMetadataSignal = computed(() {
@@ -264,6 +265,7 @@ trackMetadataSignal = computed(() {
     albumId: state?.currentTrack?.albumId,
     codec: state?.codec,
     isExplicit: state?.currentTrack?.isExplicit ?? false,
+    isUnavailable: state?.currentTrack?.isUnavailable ?? false,
   );
 }, options: const ComputedOptions(name: 'trackMetadataSignal'));
 

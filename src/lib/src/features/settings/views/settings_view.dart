@@ -17,6 +17,7 @@ import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 import 'package:yayma/src/features/core/views/widgets/smooth_scroll.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
+import 'package:yayma/src/features/search/providers/search_provider.dart';
 import 'package:yayma/src/features/settings/views/ai_content_reduction_setting.dart';
 import 'package:yayma/src/features/settings/views/lyrics_providers_dialog.dart';
 import 'package:yayma/src/features/settings/views/update_dialog.dart';
@@ -34,6 +35,7 @@ class SettingsView extends StatefulWidget {
 
 class _SettingsViewState extends State<SettingsView> {
   late final FutureSignal<bool> _adultContentSignal;
+  late final FutureSignal<bool> _unavailableTracksSignal;
   late final FutureSignal<String?> _pathSignal;
   late final FutureSignal<int> _cacheSizeSignal;
   late final FutureSignal<int> _trackCacheSizeSignal;
@@ -53,6 +55,13 @@ class _SettingsViewState extends State<SettingsView> {
   @override
   void initState() {
     super.initState();
+    _unavailableTracksSignal = futureSignal(
+      () async =>
+          await runRustFetch(
+            (ctx) => rust.getUnavailableTracksEnabled(ctx: ctx),
+          ) ??
+          false,
+    );
     _adultContentSignal = futureSignal(
       () async =>
           await runRustFetch(
@@ -403,6 +412,33 @@ class _SettingsViewState extends State<SettingsView> {
                   ],
                   const _SectionTitle(title: 'Рекомендации'),
                   const SizedBox(height: 20),
+                  SignalBuilder(
+                    builder: (context) {
+                      final enabled =
+                          _unavailableTracksSignal.value.value ?? false;
+                      return _SettingItem(
+                        title: 'Недоступные треки',
+                        subtitle: 'Дополнять поиск из Hitmos',
+                        icon: Icons.library_music_rounded,
+                        trailing: Switch(
+                          value: enabled,
+                          onChanged: (value) async {
+                            final ok = await runRustAction(
+                              (ctx) => rust.setUnavailableTracksEnabled(
+                                ctx: ctx,
+                                enabled: value,
+                              ),
+                            );
+                            if (ok) {
+                              await _unavailableTracksSignal.refresh();
+                              unawaited(searchResultsSignal.refresh());
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
                   AiContentReductionSetting(
                     read: () async {
                       final ctx = appContextSignal.value;

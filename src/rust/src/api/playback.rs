@@ -187,43 +187,53 @@ pub async fn play_liked_track(ctx: &AppContext, track_id: String) {
 }
 
 pub async fn start_wave(ctx: &AppContext, seeds: Vec<String>) {
+    if seeds.iter().any(|seed| seed.starts_with("track:ext-")) {
+        ctx.send_event(crate::api::simple::AppEvent::Notification("Внешний источник".into(), "Моя волна доступна только для треков каталога Яндекса".into()));
+        return;
+    }
     let _ = ctx.audio.tx.send(AudioMessage::StartWave(seeds)).await;
 }
 
 /// Seed used when no specific wave station is selected.
 pub const DEFAULT_WAVE_SEED: &str = "user:onyourwave";
 
-/// Station category: the part of a seed before the first ':'.
-/// Seeds without ':' form a category of their own.
-fn wave_seed_category(seed: &str) -> &str {
-    match seed.find(':') {
-        Some(idx) => &seed[..idx],
-        None => seed,
-    }
-}
-
-/// Toggle a wave station, owning the full seed policy that used to live in
-/// Dart (`WaveController.toggleStation`):
-/// - if `seed` is active, remove it;
-/// - otherwise drop the default seed plus every seed of the same category,
-///   then add `seed`; collection remains an independent opt-in to likes;
-/// - if nothing is left, fall back to the default seed.
-/// Afterwards a wave is (re)started with the resulting seeds.
-pub async fn toggle_wave_station(ctx: &AppContext, seed: String) {
-    let mut seeds = ctx.audio.signals.current_wave_seeds.get();
+/// A selected station replaces the previous station across categories.
+/// Collection is an independent opt-in to liked songs.
+fn toggled_wave_seeds(mut seeds: Vec<String>, seed: String) -> Vec<String> {
     if seeds.iter().any(|s| *s == seed) {
         seeds.retain(|s| *s != seed);
     } else {
-        let prefix = format!("{}:", wave_seed_category(&seed));
-        // Collection independently opts into likes alongside any station.
         seeds.retain(|s| *s != DEFAULT_WAVE_SEED &&
-            (s == "personal:collection" || seed == "personal:collection" || !s.starts_with(&prefix)));
+            (s == "personal:collection" || seed == "personal:collection"));
         seeds.push(seed);
     }
     if seeds.is_empty() {
         seeds.push(DEFAULT_WAVE_SEED.to_string());
     }
+    seeds
+}
+
+pub async fn toggle_wave_station(ctx: &AppContext, seed: String) {
+    let seeds = toggled_wave_seeds(ctx.audio.signals.current_wave_seeds.get(), seed);
     let _ = ctx.audio.tx.send(AudioMessage::StartWave(seeds)).await;
+}
+
+#[cfg(test)]
+mod wave_station_tests {
+    use super::*;
+
+    #[test]
+    fn choosing_a_decade_replaces_the_previous_genre() {
+        assert_eq!(toggled_wave_seeds(vec!["genre:phonk".into()], "epoch:1960".into()), ["epoch:1960"]);
+        assert_eq!(toggled_wave_seeds(vec!["genre:phonk".into(), "personal:collection".into()], "epoch:1960".into()), ["personal:collection", "epoch:1960"]);
+    }
+
+    #[test]
+    fn collection_is_independent_and_last_station_can_be_deselected() {
+        let seeds = toggled_wave_seeds(vec!["genre:phonk".into()], "personal:collection".into());
+        assert_eq!(toggled_wave_seeds(seeds, "personal:collection".into()), ["genre:phonk"]);
+        assert_eq!(toggled_wave_seeds(vec!["epoch:1960".into()], "epoch:1960".into()), [DEFAULT_WAVE_SEED]);
+    }
 }
 
 /// (Re)start "My wave": keep the current seeds, defaulting to the
