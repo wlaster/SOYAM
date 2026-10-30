@@ -209,10 +209,8 @@ class WaveSettingsPanel extends StatelessWidget {
                       _VibeItem('Без слов', 'local-language:instrumental'),
                     ], currentSeeds),
                     const SizedBox(height: 24),
-                    if (currentSeeds.isNotEmpty &&
-                        !currentSeeds.contains('user:onyourwave') &&
-                        !_isMainSeed(currentSeeds.first))
-                      _buildActiveExtraStation(context, currentSeeds.first),
+                    if (currentSeeds.isNotEmpty)
+                      _buildActiveStations(context, currentSeeds),
                   ],
                 ),
               ),
@@ -238,8 +236,9 @@ class WaveSettingsPanel extends StatelessWidget {
     );
   }
 
-  bool _isMainSeed(String seed) {
-    const mainSeeds = {
+  Widget _buildActiveStations(BuildContext context, List<String> seeds) {
+    // These options already show their selection in the sections above.
+    const inlineSeeds = {
       'activity:wake-up',
       'activity:road-trip',
       'activity:work-background',
@@ -256,10 +255,12 @@ class WaveSettingsPanel extends StatelessWidget {
       'local-language:english',
       'local-language:instrumental',
     };
-    return mainSeeds.contains(seed);
-  }
+    final stations = seeds
+        .toSet()
+        .where((seed) => !inlineSeeds.contains(seed))
+        .toList();
+    if (stations.isEmpty) return const SizedBox.shrink();
 
-  Widget _buildActiveExtraStation(BuildContext context, String seed) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -267,34 +268,51 @@ class WaveSettingsPanel extends StatelessWidget {
         SignalBuilder(
           builder: (context) {
             final catsFuture = waveStationsSignal.value;
-            var label = seed;
-
-            if (seed.startsWith('track:')) {
-              // Display hint is everything after the second ':'.
-              // indexOf-based so titles containing ':' don't break parsing.
-              final first = seed.indexOf(':');
-              final second = first >= 0 ? seed.indexOf(':', first + 1) : -1;
-              if (second >= 0 && second + 1 < seed.length) {
-                label = seed.substring(second + 1);
-              }
-            }
-
-            if (catsFuture.hasValue) {
-              for (final cat in catsFuture.value!) {
-                for (final item in cat.items) {
-                  if (item.seed == seed) {
-                    label = item.label;
-                    break;
-                  }
+            final labels = <String, String>{
+              'user:onyourwave': 'Моя волна',
+              'activity:wake-up': 'Просыпаюсь',
+              'activity:road-trip': 'В дороге',
+              'activity:work-background': 'Работаю',
+              'activity:workout': 'Тренируюсь',
+              'activity:fall-asleep': 'Засыпаю',
+              'personal:collection': 'Любимое',
+              'personal:never-heard': 'Незнакомое',
+              'personal:hits': 'Популярное',
+              'mood:energetic': 'Бодрое',
+              'mood:happy': 'Весёлое',
+              'mood:calm': 'Спокойное',
+              'mood:sad': 'Грустное',
+              'local-language:russian': 'Русский',
+              'local-language:english': 'Иностранный',
+              'local-language:instrumental': 'Без слов',
+              for (final cat in catsFuture.value ?? <StationCategoryDto>[])
+                for (final item in cat.items) item.seed: item.label,
+            };
+            String labelFor(String seed) {
+              final known = labels[seed];
+              if (known != null) return known;
+              if (seed.startsWith('track:')) {
+                final second = seed.indexOf(':', seed.indexOf(':') + 1);
+                if (second >= 0 && second + 1 < seed.length) {
+                  return seed.substring(second + 1);
                 }
               }
+              return seed;
             }
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: _RoundedChip(
-                item: _VibeItem(label, seed),
-                onSelected: onSelected,
-                isSelected: true,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final seed in stations)
+                    _RoundedChip(
+                      item: _VibeItem(labelFor(seed), seed),
+                      onSelected: onSelected,
+                      isSelected: true,
+                    ),
+                ],
               ),
             );
           },

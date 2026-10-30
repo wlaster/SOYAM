@@ -1014,7 +1014,7 @@ mod explicit_hotfix_tests {
     #[test]
     fn yandex_explicit_flag_survives_dto_and_metadata_paths() {
         for flag in [false, true] {
-            let track: yandex_music::model::track::Track = serde_json::from_value(serde_json::json!({"id":"11", "realId":"11", "title":"Test", "explicit":flag, "albums":[{"id":99,"title":"Album"}]})).unwrap();
+            let track: yandex_music::model::track::Track = serde_json::from_value(serde_json::json!({"id":"11", "realId":"11", "title":"Test", "explicit":flag, "albums":[{"id":99,"title":"Album","explicit":true,"contentWarning":"explicit"}]})).unwrap();
             let empty = std::collections::HashSet::<String>::new();
             assert_eq!(SimpleTrackDto::from_yandex(&track, &empty, &empty).is_explicit, flag);
             assert_eq!(SimpleTrackDto::from_yandex_owned(track.clone(), &empty, &empty).is_explicit, flag);

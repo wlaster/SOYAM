@@ -223,6 +223,24 @@ void main() {
     },
   );
 
+  testWidgets('last plain lyric scrolls above the bottom fade', (tester) async {
+    await show(
+      tester,
+      LyricsResult([
+        for (var i = 0; i < 30; i++)
+          LyricLine(Duration.zero, 'Plain line $i', Duration.zero),
+      ], 'Яндекс Музыка'),
+    );
+    final list = find.byType(ListView);
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    final viewport = tester.getRect(list);
+    final last = tester.getRect(find.text('Plain line 29'));
+    expect(last.top, greaterThan(viewport.top + viewport.height * .12));
+    expect(last.bottom, lessThan(viewport.top + viewport.height * .72));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'collection download uses the actual animated button as menu trigger',
     (tester) async {

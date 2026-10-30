@@ -102,7 +102,6 @@ pub(crate) static ALLOW_ADULT_CONTENT: std::sync::atomic::AtomicBool = std::sync
 
 pub(crate) fn is_adult_track(track: &yandex_music::model::track::Track) -> bool {
     track.explicit == Some(true) || track.content_warning.as_deref().is_some_and(|v| v.eq_ignore_ascii_case("explicit"))
-        || track.albums.iter().any(|album| album.explicit == Some(true) || album.content_warning.as_deref().is_some_and(|v| v.eq_ignore_ascii_case("explicit")))
 }
 
 #[cfg(test)]
@@ -111,6 +110,10 @@ mod adult_content_tests {
     #[test]
     fn filters_explicit_flags_and_warning_but_keeps_clean_tracks() {
         let mut track = crate::util::track::test_track("adult-filter");
+        assert!(!is_adult_track(&track));
+        track.albums = vec![serde_json::from_value(serde_json::json!({
+            "id": 1, "title": "Album", "explicit": true, "contentWarning": "explicit"
+        })).unwrap()];
         assert!(!is_adult_track(&track));
         track.explicit = Some(true);
         assert!(is_adult_track(&track));

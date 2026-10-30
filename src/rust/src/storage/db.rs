@@ -130,6 +130,18 @@ impl AppDatabase {
             merge_foreign_tables(&conn);
 
             let mut db = Self { conn };
+            // Old positive flags could have been inherited from the album.
+            // Refresh them once through the normal missing-metadata path.
+            let explicit_scope: Option<String> = db.conn.query_row(
+                "SELECT value FROM app_settings WHERE key = 'track_explicit_scope'",
+                [], |row| row.get(0),
+            ).optional()?;
+            if explicit_scope.as_deref() != Some("1") {
+                let tx = db.conn.transaction()?;
+                tx.execute("UPDATE track_metadata SET is_explicit = NULL WHERE is_explicit = 1", [])?;
+                tx.execute("INSERT OR REPLACE INTO app_settings(key, value) VALUES ('track_explicit_scope', '1')", [])?;
+                tx.commit()?;
+            }
             db.import_liked_from_settings();
             Ok(db)
         })
@@ -635,8 +647,8 @@ mod explicit_cache_hotfix_tests {
         let path = std::env::temp_dir().join(format!("soyam-explicit-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         std::fs::create_dir_all(&path).unwrap();
         let conn = Connection::open(path.join("yamusic_v2.db")).unwrap();
-        conn.execute("CREATE TABLE track_metadata (track_id TEXT PRIMARY KEY, title TEXT NOT NULL, version TEXT, album TEXT, album_id TEXT, cover_url TEXT, duration_ms INTEGER NOT NULL)", []).unwrap();
-        conn.execute("INSERT INTO track_metadata(track_id,title,duration_ms) VALUES ('11','Old',1000)", []).unwrap();
+        conn.execute("CREATE TABLE track_metadata (track_id TEXT PRIMARY KEY, title TEXT NOT NULL, version TEXT, album TEXT, album_id TEXT, cover_url TEXT, duration_ms INTEGER NOT NULL, is_explicit INTEGER)", []).unwrap();
+        conn.execute("INSERT INTO track_metadata(track_id,title,duration_ms,is_explicit) VALUES ('11','Old',1000,1)", []).unwrap();
         drop(conn);
         let mut db = AppDatabase::init(Some(path.clone())).await.unwrap();
         let mut metadata = db.get_track_metadata(&["11".into()]).await.unwrap().remove(0);

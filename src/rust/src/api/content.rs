@@ -652,28 +652,44 @@ pub async fn fetch_wave_stations(ctx: &AppContext) -> Vec<StationCategoryDto> {
         });
     }
 
-    let mut cats: Vec<StationCategoryDto> = grouped
-        .into_iter()
-        .map(|(k, mut v)| {
-            let title = if k == "Моя волна" {
-                k
-            } else {
-                let mut chars = k.chars();
-                chars.next().map_or(String::new(), |f| {
-                    f.to_uppercase().collect::<String>() + chars.as_str()
-                })
-            };
-            v.sort_by(|a, b| a.label.cmp(&b.label));
-            StationCategoryDto { title, items: v }
-        })
-        .collect();
-
-    cats.sort_by(|a, b| match (a.title.as_str(), b.title.as_str()) {
+    // Keep the existing category order based on API keys, before translating titles.
+    let mut groups: Vec<_> = grouped.into_iter().collect();
+    groups.retain(|(key, _)| key != "author" && !key.starts_with("mix-by-"));
+    groups.sort_by(|(a, _), (b, _)| match (a.as_str(), b.as_str()) {
+        ("Моя волна", "Моя волна") => std::cmp::Ordering::Equal,
         ("Моя волна", _) => std::cmp::Ordering::Less,
         (_, "Моя волна") => std::cmp::Ordering::Greater,
-        (a_str, b_str) => a_str.cmp(b_str),
+        _ => a.cmp(b),
     });
+    let cats = groups.into_iter().map(|(key, mut items)| {
+        for item in &mut items {
+            item.label = station_label(&item.label);
+        }
+        items.sort_by(|a, b| a.label.cmp(&b.label));
+        StationCategoryDto { title: station_category_title(&key).to_string(), items }
+    }).collect();
     cats
+}
+
+fn station_category_title(key: &str) -> &str {
+    match key {
+        "activity" => "Занятия",
+        "editorial" => "Подборки",
+        "epoch" => "Эпохи",
+        "genre" => "Жанры",
+        "local-language" => "Языки",
+        "micro-genre" => "Поджанры",
+        "mood" => "Настроение",
+        "personal" => "Для вас",
+        "tempo" => "Темп",
+        _ => key,
+    }
+}
+
+fn station_label(label: &str) -> String {
+    static MIX: OnceLock<regex::Regex> = OnceLock::new();
+    MIX.get_or_init(|| regex::Regex::new(r"(?i)\b(?:микс|mix)\b[:\s–—-]*").unwrap())
+        .replace_all(label, "").trim().to_string()
 }
 
 // ---- Lyrics ----
@@ -923,6 +939,16 @@ pub async fn set_lyrics_provider_enabled(
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn station_titles_are_translated_and_mix_word_is_removed() {
+        assert_eq!(station_category_title("epoch"), "Эпохи");
+        assert_eq!(station_category_title("micro-genre"), "Поджанры");
+        assert_eq!(station_label("Микс: Рок"), "Рок");
+        assert_eq!(station_label("Рок микс"), "Рок");
+        assert_eq!(station_label("Mix tempo"), "tempo");
+        assert_eq!(station_label("Ремиксы"), "Ремиксы");
+    }
 
     #[tokio::test]
     async fn automatic_lyrics_continues_after_failure_and_prefers_timing() {

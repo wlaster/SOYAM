@@ -653,8 +653,10 @@ impl ApiService {
         track_id: String,
         format: LyricsFormat,
     ) -> Result<Option<String>> {
+        // The lyrics signing key belongs to the default Android client identity.
+        let track_id = crate::util::track::CleanId::to_base_id(&track_id);
         let opts = GetLyricsOptions::new(track_id, format);
-        match self.client.get_lyrics(&opts).await {
+        match self.file_info_client.get_lyrics(&opts).await {
             Ok(lyrics) => {
                 let url = lyrics.download_url;
                 let text = self
