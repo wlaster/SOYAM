@@ -33,7 +33,7 @@ class _ProgressAppearanceSliderState extends State<ProgressAppearanceSlider>
     with TickerProviderStateMixin {
   late final AnimationController _phase = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2800),
+    duration: const Duration(milliseconds: 3200),
   );
   late final AnimationController _amplitude = AnimationController(
     vsync: this,
