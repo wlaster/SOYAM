@@ -1,9 +1,10 @@
 import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
+import 'package:signals_flutter/signals_flutter.dart';
 import 'package:yayma/src/features/core/providers/visual_effects_provider.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 
-class ProgressAppearanceSlider extends StatelessWidget {
+class ProgressAppearanceSlider extends StatefulWidget {
   const ProgressAppearanceSlider({
     required this.appearance,
     required this.value,
@@ -24,48 +25,115 @@ class ProgressAppearanceSlider extends StatelessWidget {
   final ValueChanged<double> onChanged;
   final ValueChanged<double> onEnd;
   @override
-  Widget build(BuildContext context) => SizedBox(
-    height: 28,
-    child: Stack(
-      children: [
-        Positioned.fill(
-          child: IgnorePointer(
-            child: CustomPaint(
-              painter: _ProgressPainter(
-                appearance,
-                value / max,
-                color,
-                inactiveColor,
-                MediaQuery.devicePixelRatioOf(context),
+  State<ProgressAppearanceSlider> createState() =>
+      _ProgressAppearanceSliderState();
+}
+
+class _ProgressAppearanceSliderState extends State<ProgressAppearanceSlider>
+    with TickerProviderStateMixin {
+  late final AnimationController _phase = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2800),
+  );
+  late final AnimationController _amplitude = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 200),
+    value: isPlayingSignal.peek() ? 1 : 0,
+  );
+  bool? _wavePlaying;
+  late final EffectCleanup _playingSubscription;
+
+  void _updateMotion() {
+    final playing =
+        widget.appearance == ProgressAppearance.android &&
+        isPlayingSignal.peek();
+    if (_wavePlaying != playing) {
+      _wavePlaying = playing;
+      _amplitude.animateTo(playing ? 1 : 0, curve: Curves.easeOutCubic);
+    }
+    if (playing) {
+      if (!_phase.isAnimating) _phase.repeat();
+    } else {
+      _phase.stop();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _playingSubscription = isPlayingSignal.subscribe((_) => _updateMotion());
+    _updateMotion();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProgressAppearanceSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _updateMotion();
+  }
+
+  @override
+  void dispose() {
+    _playingSubscription();
+    _phase.dispose();
+    _amplitude.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appearance = widget.appearance;
+    final value = widget.value;
+    final max = widget.max;
+    final color = widget.color;
+    final inactiveColor = widget.inactiveColor;
+    final onStart = widget.onStart;
+    final onChanged = widget.onChanged;
+    final onEnd = widget.onEnd;
+    return SizedBox(
+      height: 28,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _ProgressPainter(
+                  appearance,
+                  value / max,
+                  color,
+                  inactiveColor,
+                  MediaQuery.devicePixelRatioOf(context),
+                  _phase,
+                  _amplitude,
+                ),
               ),
             ),
           ),
-        ),
-        Positioned.fill(
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 0,
-              activeTrackColor: Colors.transparent,
-              inactiveTrackColor: Colors.transparent,
-              thumbColor: Colors.transparent,
-              overlayColor: Colors.transparent,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 0),
-              showValueIndicator: ShowValueIndicator.never,
-            ),
-            child: Slider(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              value: value,
-              max: max,
-              onChangeStart: onStart,
-              onChanged: onChanged,
-              onChangeEnd: onEnd,
+          Positioned.fill(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 0,
+                activeTrackColor: Colors.transparent,
+                inactiveTrackColor: Colors.transparent,
+                thumbColor: Colors.transparent,
+                overlayColor: Colors.transparent,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 0),
+                showValueIndicator: ShowValueIndicator.never,
+              ),
+              child: Slider(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                value: value,
+                max: max,
+                onChangeStart: onStart,
+                onChanged: onChanged,
+                onChangeEnd: onEnd,
+              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class _ProgressPainter extends CustomPainter {
@@ -75,9 +143,13 @@ class _ProgressPainter extends CustomPainter {
     this.color,
     this.inactive,
     this.dpr,
+    this.phase,
+    this.amplitude,
   ) : super(
         repaint: appearance == ProgressAppearance.visualizer
             ? vibeTickSignal
+            : appearance == ProgressAppearance.android
+            ? Listenable.merge([phase, amplitude])
             : null,
       );
   final ProgressAppearance appearance;
@@ -85,6 +157,8 @@ class _ProgressPainter extends CustomPainter {
   final Color color;
   final Color inactive;
   final double dpr;
+  final Animation<double> phase;
+  final Animation<double> amplitude;
   @override
   void paint(Canvas canvas, Size size) {
     const left = 16.0;
@@ -102,11 +176,15 @@ class _ProgressPainter extends CustomPainter {
         paint..color = inactive,
       );
       final activeWidth = end - left;
-      final amplitude = 3.5 * (activeWidth / 10).clamp(0.0, 1.0);
+      final amplitude =
+          3.5 * (activeWidth / 10).clamp(0.0, 1.0) * this.amplitude.value;
       double waveY(double x) {
         final distance = ((end - x) / 10).clamp(0.0, 1.0);
         final envelope = distance * distance * (3 - 2 * distance);
-        return y + math.cos((x - left) / 5) * amplitude * envelope;
+        return y +
+            math.sin((x - end) / 5 + phase.value * 2 * math.pi) *
+                amplitude *
+                envelope;
       }
 
       final path = Path()..moveTo(left, waveY(left));

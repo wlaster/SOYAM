@@ -75,6 +75,7 @@ pub enum AudioMessage {
 
     // Internal/Other
     ReloadCurrentTrack,
+    TrackMetadataResolved(Track),
     TrackEnded,
     RecreateStream,
 }

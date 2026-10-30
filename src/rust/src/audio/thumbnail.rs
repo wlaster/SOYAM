@@ -20,6 +20,7 @@ pub const WM_APP_TASKBAR: u32 = WM_APP + 1338;
 const MAX_READY_BITMAPS: usize = 4;
 
 struct CachedBitmap {
+    hash: u64,
     hbitmap_ptr: isize,
     width: u32,
     height: u32,
@@ -82,7 +83,9 @@ impl ThumbnailManager {
 
     pub fn update_cover(&self, img_bytes: Vec<u8>) {
         let hash = cover_hash(&img_bytes);
-        if INVALIDATED_HASH.load(Ordering::Relaxed) == hash {
+        if INVALIDATED_HASH.load(Ordering::Relaxed) == hash
+            && LAST_COVER.lock().as_ref().is_some_and(|cover| cover.hash == hash)
+        {
             return;
         }
 
@@ -152,7 +155,7 @@ fn prerender_loop(rx: std::sync::mpsc::Receiver<PrerenderJob>) {
                     }
                     break;
                 }
-                replace_ready_bitmap(&mut ready, tw, th, h);
+                replace_ready_bitmap(&mut ready, tw, th, h, job.hash);
                 installed_any = true;
             }
         }
@@ -171,7 +174,7 @@ fn prerender_loop(rx: std::sync::mpsc::Receiver<PrerenderJob>) {
 
 /// Replace (or add) the cached bitmap for `(tw, th)`, deleting the evicted
 /// HBITMAP. Caller holds `READY_BITMAPS`.
-fn replace_ready_bitmap(ready: &mut Vec<CachedBitmap>, tw: u32, th: u32, h: HBITMAP) {
+fn replace_ready_bitmap(ready: &mut Vec<CachedBitmap>, tw: u32, th: u32, h: HBITMAP, hash: u64) {
     if let Some(pos) = ready.iter().position(|c| c.width == tw && c.height == th) {
         let old = ready.remove(pos);
         unsafe {
@@ -184,6 +187,7 @@ fn replace_ready_bitmap(ready: &mut Vec<CachedBitmap>, tw: u32, th: u32, h: HBIT
         }
     }
     ready.push(CachedBitmap {
+        hash,
         hbitmap_ptr: h.0 as isize,
         width: tw,
         height: th,
@@ -307,19 +311,19 @@ unsafe fn handle_iconic_request(hwnd: HWND, msg: u32, lparam: LPARAM) -> LRESULT
         record_requested_size(tw, th);
 
         let mut ready = READY_BITMAPS.lock();
+        let cover = LAST_COVER.lock().as_ref().map(|c| (c.hash, c.bytes.clone()));
         // The lock is held across the DWM call: the prerender thread takes the
         // same lock to replace bitmaps, so an evicted HBITMAP can't be deleted
         // while DWM is still reading it.
-        if let Some(cached) = ready.iter().find(|c| c.width == tw && c.height == th) {
+        if let Some(cached) = ready.iter().find(|c| c.width == tw && c.height == th && Some(c.hash) == cover.as_ref().map(|c| c.0)) {
             set_iconic_bitmap(hwnd, msg, HBITMAP(cached.hbitmap_ptr as *mut _));
             return LRESULT(0);
         }
 
-        let bytes = LAST_COVER.lock().as_ref().map(|c| c.bytes.clone());
-        if let Some(bytes) = bytes
+        if let Some((hash, bytes)) = cover
             && let Some(h) = create_hbitmap_from_wic(&bytes, tw, th)
         {
-            replace_ready_bitmap(&mut ready, tw, th, h);
+            replace_ready_bitmap(&mut ready, tw, th, h, hash);
             set_iconic_bitmap(hwnd, msg, h);
         }
 

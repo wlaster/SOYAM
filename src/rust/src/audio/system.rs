@@ -210,7 +210,7 @@ impl AudioSystem {
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
                     let current_track = signals_clone.current_track.get();
-                    let current_track_id = current_track.as_ref().map(|t| t.id.clone());
+                    let current_track_id = current_track.as_ref().map(|t| (t.id.clone(), crate::api::models::get_any_cover(t)));
                     let is_playing = signals_clone.is_playing.get();
 
                     let mut smtc_guard: tokio::sync::MutexGuard<SmtcManager> =
@@ -403,6 +403,18 @@ impl AudioSystem {
         for _ in 0..=limit {
             let disliked = self.state.read().await.liked.is_disliked(&track.id);
             if !disliked && (crate::app::settings::ALLOW_ADULT_CONTENT.load(Ordering::Relaxed) || !crate::app::settings::is_adult_track(&track)) {
+                if !crate::app::settings::is_adult_track(&track) {
+                    let api = self.yandex.api.clone();
+                    let tx = self.tx.clone();
+                    let id = track.id.clone();
+                    tokio::spawn(async move {
+                        if let Ok(tracks) = api.fetch_tracks(vec![id]).await
+                            && let Some(full) = tracks.into_iter().next()
+                        {
+                            let _ = tx.send(AudioMessage::TrackMetadataResolved(full)).await;
+                        }
+                    });
+                }
                 self.controller.play_track(track, start_paused, position, soft_reload).await;
                 return;
             }
@@ -468,6 +480,19 @@ impl AudioSystem {
 
     async fn process_message(&mut self, msg: AudioMessage) {
         match msg {
+            AudioMessage::TrackMetadataResolved(full) => {
+                use crate::util::track::CleanId;
+                if let Some(mut current) = self.signals.current_track.get()
+                    && current.id.to_base_id() == full.id.to_base_id()
+                {
+                    current.explicit = Some(crate::app::settings::is_adult_track(&full));
+                    if crate::api::models::get_any_cover(&current).is_none() {
+                        current.cover_uri = crate::api::models::get_any_cover(&full);
+                    }
+                    current.content_warning = full.content_warning;
+                    self.signals.set_current_track(Some(current));
+                }
+            }
             AudioMessage::ContextFetched { generation, result } => match result {
                 Ok((ctx, tracks, index)) => {
                     self.load_fetched_context(generation, ctx, tracks, index)

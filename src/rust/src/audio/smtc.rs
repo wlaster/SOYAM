@@ -7,6 +7,29 @@ use crate::audio::commands::AudioMessage;
 use tokio::sync::mpsc;
 use yandex_music::model::track::Track;
 
+fn cover_url_for_track(track: &Track) -> Option<String> {
+    let cover = crate::api::models::get_any_cover(track).map(|uri| {
+        uri.split('/').map(|part| if part == "400x400" { "200x200" } else { part }).collect::<Vec<_>>().join("/")
+    });
+    crate::api::models::format_cover(cover, "200x200")
+}
+
+#[cfg(test)]
+mod cover_url_tests {
+    #[test]
+    fn cached_and_api_cover_addresses_are_normalized_once() {
+        for uri in [
+            "https://example.com/400x400",
+            "example.com/%%",
+            "//example.com/%%",
+        ] {
+            let mut track = crate::util::track::test_track("cover");
+            track.cover_uri = Some(uri.into());
+            assert_eq!(super::cover_url_for_track(&track).as_deref(), Some("https://example.com/200x200"));
+        }
+    }
+}
+
 #[cfg(target_os = "windows")]
 use crate::audio::thumbnail::ThumbnailManager;
 
@@ -18,6 +41,8 @@ pub struct SmtcManager {
     http_cache: std::sync::Arc<crate::storage::cache::HttpCache>,
     #[cfg(target_os = "windows")]
     thumbnail_manager: Option<ThumbnailManager>,
+    #[cfg(target_os = "windows")]
+    cover_generation: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl SmtcManager {
@@ -93,10 +118,14 @@ impl SmtcManager {
             http_cache,
             #[cfg(target_os = "windows")]
             thumbnail_manager,
+            #[cfg(target_os = "windows")]
+            cover_generation: Default::default(),
         })
     }
 
     pub fn update_metadata(&mut self, track: &Track) {
+        #[cfg(target_os = "windows")]
+        let generation = self.cover_generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
         let title = track.title.as_deref().unwrap_or("Unknown Title");
 
         let artists = track
@@ -108,18 +137,17 @@ impl SmtcManager {
 
         let album = track.albums.first().and_then(|a| a.title.as_deref());
 
-        let cover_url = track
-            .cover_uri
-            .as_ref()
-            .map(|uri| format!("https://{}", uri.replace("%%", "400x400")));
+        let cover_url = cover_url_for_track(track);
 
         #[cfg(target_os = "windows")]
         if let (Some(url), Some(thumb_mgr)) = (&cover_url, self.thumbnail_manager) {
             let url_clone = url.clone();
             let cache = self.http_cache.clone();
+            let current_generation = self.cover_generation.clone();
             tokio::spawn(async move {
                 if let Ok(path) = cache.get_file(&url_clone).await
                     && let Ok(bytes) = tokio::fs::read(path).await
+                    && current_generation.load(std::sync::atomic::Ordering::SeqCst) == generation
                 {
                     thumb_mgr.update_cover(bytes);
                 }
