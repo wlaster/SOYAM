@@ -14,6 +14,7 @@ import 'package:yayma/src/features/core/views/widgets/lyrics_view.dart';
 import 'package:yayma/src/features/core/views/widgets/track_context_sheet.dart';
 import 'package:yayma/src/features/core/views/widgets/track_details_dialog.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
+import 'package:yayma/src/features/library/views/create_playlist_with_track.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 import 'package:yayma/src/rust/api/content.dart' as rust;
 import 'package:yayma/src/rust/api/library.dart' as rust_library;
@@ -214,7 +215,11 @@ class TrackContextActions {
       case 'wave':
         unawaited(PlaybackController.startTrackWave(trackId, title));
       case 'create_playlist':
-        await _createPlaylistAndAddTrack(context);
+        await promptCreatePlaylistWithTrack(
+          context,
+          trackId: trackId,
+          albumId: albumId,
+        );
       case 'about':
         TrackDetailsDialog.show(context, trackId);
       case 'audio_settings':
@@ -233,66 +238,14 @@ class TrackContextActions {
           try {
             await rust.deleteDownloadedTrack(ctx: ctx, trackId: trackId);
             showAppSuccess('Трек удален из загрузок');
-            unawaited(refreshDownloadedTracks());
           } on Object catch (e) {
             showAppError('Ошибка: $e');
+          } finally {
+            unawaited(refreshDownloadedTracks());
           }
         }
       case 'download_files':
         await _downloadTrack(DownloadMode.files);
-    }
-  }
-
-  Future<String?> _promptPlaylistTitle(BuildContext context) {
-    final controller = TextEditingController();
-    Future<void> close([String? value]) async {
-      Navigator.of(context, rootNavigator: true).pop<String>(value);
-    }
-
-    return showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Новый плейлист'),
-          content: TextField(
-            controller: controller,
-            maxLength: 64,
-            decoration: const InputDecoration(hintText: 'Название'),
-            onSubmitted: close,
-          ),
-          actions: [
-            TextButton(onPressed: close, child: const Text('Отмена')),
-            FilledButton(
-              onPressed: () => close(controller.text),
-              child: const Text('Создать'),
-            ),
-          ],
-        );
-      },
-    ).whenComplete(controller.dispose);
-  }
-
-  /// Creates a private playlist with the entered name and immediately adds
-  /// the current track to it.
-  Future<void> _createPlaylistAndAddTrack(BuildContext context) async {
-    final title = await _promptPlaylistTitle(context);
-    final trimmed = title?.trim();
-    if (trimmed == null || trimmed.isEmpty || !context.mounted) return;
-
-    final existingKinds = playlistsSignal.value.map((p) => p.kind).toSet();
-    final success = await createPlaylistAction(trimmed, isPublic: false);
-    if (!context.mounted) return;
-    if (!success) {
-      showAppError('Ошибка при создании плейлиста');
-      return;
-    }
-
-    final created = playlistsSignal.value
-        .where((p) => !existingKinds.contains(p.kind))
-        .toList();
-    if (created.isNotEmpty) {
-      await addTrackToPlaylistAction(created.first.kind, trackId, albumId);
-      if (context.mounted) showAppSuccess("Создан плейлист '$trimmed'");
     }
   }
 

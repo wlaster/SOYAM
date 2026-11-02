@@ -1050,12 +1050,15 @@ impl AudioSystem {
 
                 let mut db = db_arc.lock().await;
                 let dislikes: Vec<String> = state.read().await.liked.snapshot().1.into_iter().collect();
-                let _ = db.save_setting("disliked_track_ids", &dislikes).await;
-                let _ = db.save_liked_tracks(&ids).await;
-                let _ = db
-                    .save_setting("liked_tracks_revision", &new_revision)
-                    .await;
+                let saved = db.save_liked_snapshot(&ids, &dislikes, new_revision).await;
                 drop(db);
+                if let Err(error) = saved {
+                    tracing::error!(%error, "failed_to_save_liked_snapshot");
+                    let mut state = state.write().await;
+                    if state.liked.revision == Some(new_revision) {
+                        state.liked.revision = None;
+                    }
+                }
 
                 signals.library_changed.send_replace(());
                 signals.changed.send_replace(());
@@ -1078,10 +1081,13 @@ impl AudioSystem {
                         {
                             let mut state = state.write().await;
                             state.liked.set_liked_ids(ids);
+                            state.liked.revision = None;
                         }
                         let liked_ids = state.read().await.liked.ordered_snapshot().0;
                         let mut db = db_arc.lock().await;
-                        let _ = db.save_liked_tracks(&liked_ids).await;
+                        if let Err(error) = db.save_liked_tracks(&liked_ids).await {
+                            tracing::error!(%error, "failed_to_save_fallback_liked_tracks");
+                        }
                         drop(db);
                         signals.library_changed.send_replace(());
                         tracing::info!("Synced {} liked track IDs (fallback full pull)", count);

@@ -188,7 +188,7 @@ pub async fn fetch_full_tracks(
                     .await;
                     match result {
                         Ok(Ok(tracks)) => {
-                            fetched.extend(tracks);
+                            fetched.extend(restore_track_order(&chunk_ids, tracks));
                             break;
                         }
                         Ok(Err(_)) | Err(_) if attempt < 2 => {
@@ -201,6 +201,16 @@ pub async fn fetch_full_tracks(
             fetched
         }
     }
+}
+
+fn restore_track_order(ids: &[String], tracks: Vec<Track>) -> Vec<Track> {
+    let by_id: std::collections::HashMap<String, Track> = tracks
+        .into_iter()
+        .map(|track| (track.id.to_base_id().to_owned(), track))
+        .collect();
+    ids.iter()
+        .filter_map(|id| by_id.get(id.to_base_id()).cloned())
+        .collect()
 }
 
 /// Minimal `Track` for unit tests. Only `id`/`realId` are required by the
@@ -248,6 +258,12 @@ pub(crate) fn ordered_playback_tracks(
 #[cfg(test)]
 mod list_playback_hotfix_tests {
     use super::*;
+    #[test]
+    fn partial_playlist_fetch_restores_order_and_duplicates() {
+        let ids = vec!["b".into(), "a".into(), "b".into(), "missing".into()];
+        let tracks = restore_track_order(&ids, vec![test_track("a"), test_track("b")]);
+        assert_eq!(tracks.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["b", "a", "b"]);
+    }
     #[test]
     fn resolves_album_ids_preserves_order_and_previous_tracks() {
         let tracks: Vec<Track> = ["11", "22", "33"].into_iter().map(|id| serde_json::from_value(serde_json::json!({"id":id,"realId":id,"title":id})).unwrap()).collect();

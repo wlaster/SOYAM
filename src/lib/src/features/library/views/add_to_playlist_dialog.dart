@@ -11,6 +11,7 @@ import 'package:yayma/src/features/core/views/widgets/rust_cached_image.dart';
 import 'package:yayma/src/features/core/views/widgets/smooth_scroll.dart';
 import 'package:yayma/src/features/core/views/widgets/track_context_sheet.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
+import 'package:yayma/src/features/library/views/create_playlist_with_track.dart';
 import 'package:yayma/src/rust/api/models.dart';
 
 class AddToPlaylistDialog extends SignalWidget {
@@ -45,10 +46,11 @@ class AddToPlaylistDialog extends SignalWidget {
       rebuildOn: version,
       onSelected: (value) async {
         if (value == 'create_playlist') {
-          final kind = await _createPlaylistAndAddTrack(context, track);
-          if (kind != null) {
-            showAppSuccess('Трек добавлен в плейлист');
-          }
+          await promptCreatePlaylistWithTrack(
+            context,
+            trackId: track.id,
+            albumId: track.albumId,
+          );
           return;
         }
         if (!value.startsWith('add_to_')) return;
@@ -88,66 +90,6 @@ class AddToPlaylistDialog extends SignalWidget {
         ];
       },
     );
-  }
-
-  static Future<String?> _promptPlaylistTitle(BuildContext context) {
-    final controller = TextEditingController();
-    Future<void> close([String? value]) async {
-      Navigator.of(context, rootNavigator: true).pop<String>(value);
-    }
-
-    return showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Новый плейлист'),
-          content: TextField(
-            controller: controller,
-            maxLength: 64,
-            decoration: const InputDecoration(hintText: 'Название'),
-            onSubmitted: close,
-          ),
-          actions: [
-            TextButton(onPressed: close, child: const Text('Отмена')),
-            FilledButton(
-              onPressed: () => close(controller.text),
-              child: const Text('Создать'),
-            ),
-          ],
-        );
-      },
-    ).whenComplete(controller.dispose);
-  }
-
-  /// Creates a private playlist and immediately adds track [track] to it.
-  static Future<int?> _createPlaylistAndAddTrack(
-    BuildContext context,
-    SimpleTrackDto track,
-  ) async {
-    final title = await _promptPlaylistTitle(context);
-    final trimmed = title?.trim();
-    if (trimmed == null || trimmed.isEmpty) return null;
-
-    final existingKinds = playlistsSignal.value.map((p) => p.kind).toSet();
-    final success = await createPlaylistAction(trimmed, isPublic: false);
-    if (!success) {
-      showAppError('Ошибка при создании плейлиста');
-      return null;
-    }
-
-    final created = playlistsSignal.value
-        .where((p) => !existingKinds.contains(p.kind))
-        .toList();
-    if (created.isEmpty) return null;
-
-    showAppSuccess("Создан плейлист '$trimmed'");
-    final added = await addTrackToPlaylistAction(
-      created.first.kind,
-      track.id,
-      track.albumId,
-    );
-    if (!added) showAppError('Ошибка при добавлении трека');
-    return created.first.kind;
   }
 
   @override

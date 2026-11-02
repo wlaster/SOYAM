@@ -403,6 +403,14 @@ impl AppDatabase {
 
     pub async fn save_liked_tracks(&mut self, track_ids: &[String]) -> DbResult<()> {
         let tx = self.conn.transaction()?;
+        Self::replace_liked_tracks(&tx, track_ids)?;
+        // A fallback full pull has no matching server revision.
+        tx.execute("DELETE FROM app_settings WHERE key = 'liked_tracks_revision'", [])?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn replace_liked_tracks(tx: &rusqlite::Transaction<'_>, track_ids: &[String]) -> DbResult<()> {
         tx.execute("DELETE FROM liked_tracks", [])?;
         {
             let mut stmt =
@@ -410,6 +418,27 @@ impl AppDatabase {
             for id in track_ids {
                 stmt.execute(params![id])?;
             }
+        }
+        Ok(())
+    }
+
+    pub async fn save_liked_snapshot(
+        &mut self,
+        track_ids: &[String],
+        disliked_ids: &[String],
+        revision: u64,
+    ) -> DbResult<()> {
+        let dislikes = serde_json::to_string(disliked_ids)
+            .map_err(|error| AppError::DbError(error.to_string()))?;
+        let revision = revision.to_string();
+        let tx = self.conn.transaction()?;
+        Self::replace_liked_tracks(&tx, track_ids)?;
+        for (key, value) in [("disliked_track_ids", dislikes), ("liked_tracks_revision", revision)] {
+            tx.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![key, value],
+            )?;
         }
         tx.commit()?;
         Ok(())
@@ -440,8 +469,16 @@ impl AppDatabase {
     }
 
     pub async fn upsert_track_metadata(&mut self, metadata: TrackMetadata) -> DbResult<()> {
+        self.upsert_track_metadata_batch(&[metadata]).await
+    }
+
+    pub async fn upsert_track_metadata_batch(&mut self, metadata: &[TrackMetadata]) -> DbResult<()> {
+        if metadata.is_empty() {
+            return Ok(());
+        }
         let tx = self.conn.transaction()?;
-        tx.execute(
+        {
+            let mut upsert = tx.prepare(
             "INSERT INTO track_metadata (track_id, title, version, album, album_id, cover_url, duration_ms, is_explicit)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(track_id) DO UPDATE SET
@@ -451,29 +488,20 @@ impl AppDatabase {
              album_id = excluded.album_id,
              cover_url = excluded.cover_url,
              duration_ms = excluded.duration_ms,
-             is_explicit = excluded.is_explicit",
-            params![
-                metadata.id,
-                metadata.title,
-                metadata.version,
-                metadata.album,
-                metadata.album_id,
-                metadata.cover_url,
-                metadata.duration_ms as i64,
-                metadata.is_explicit
-            ],
-        )?;
-        tx.execute(
-            "DELETE FROM track_metadata_artists WHERE track_id = ?1",
-            params![metadata.id],
-        )?;
-        {
-            let mut stmt = tx.prepare(
-                "INSERT INTO track_metadata_artists (track_id, artist_id, name, position)
-                 VALUES (?1, ?2, ?3, ?4)",
-            )?;
-            for (i, artist) in metadata.artists.into_iter().enumerate() {
-                stmt.execute(params![metadata.id, artist.id, artist.name, i as i64])?;
+             is_explicit = excluded.is_explicit")?;
+            let mut delete_artists = tx.prepare("DELETE FROM track_metadata_artists WHERE track_id = ?1")?;
+            let mut insert_artist = tx.prepare(
+            "INSERT INTO track_metadata_artists (track_id, artist_id, name, position)
+             VALUES (?1, ?2, ?3, ?4)")?;
+            for item in metadata {
+                upsert.execute(params![
+                    item.id, item.title, item.version, item.album, item.album_id,
+                    item.cover_url, item.duration_ms as i64, item.is_explicit
+                ])?;
+                delete_artists.execute(params![item.id])?;
+                for (i, artist) in item.artists.iter().enumerate() {
+                    insert_artist.execute(params![item.id, artist.id, artist.name, i as i64])?;
+                }
             }
         }
         tx.commit()?;
@@ -547,8 +575,8 @@ impl AppDatabase {
             // Restore the requested order, skip unknown ids.
             let mut results = Vec::new();
             for id in track_ids {
-                if let Some(t) = by_id.remove(id) {
-                    results.push(t);
+                if let Some(t) = by_id.get(id) {
+                    results.push(t.clone());
                 }
             }
             Ok(results)
@@ -642,6 +670,82 @@ impl AppDatabase {
 #[cfg(test)]
 mod explicit_cache_hotfix_tests {
     use super::*;
+
+    fn memory_db() -> AppDatabase {
+        let conn = Connection::open_in_memory().unwrap();
+        for sql in [CREATE_APP_SETTINGS, CREATE_LIKED_TRACKS, CREATE_TRACK_METADATA, CREATE_TRACK_ARTISTS] {
+            conn.execute(sql, []).unwrap();
+        }
+        AppDatabase { conn }
+    }
+
+    fn metadata(id: &str, title: &str) -> TrackMetadata {
+        TrackMetadata {
+            id: id.into(), title: title.into(), version: None,
+            artists: vec![TrackArtistDto { id: "artist".into(), name: "Name".into() }],
+            album: None, album_id: None, cover_url: None, duration_ms: 1000,
+            is_explicit: Some(false),
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn snapshot_rolls_back_tracks_dislikes_and_revision_on_failure() {
+        let mut db = memory_db();
+        db.save_liked_snapshot(&["old".into()], &["old-dislike".into()], 1).await.unwrap();
+        db.conn.execute_batch("CREATE TRIGGER fail_revision BEFORE UPDATE ON app_settings WHEN NEW.key = 'liked_tracks_revision' BEGIN SELECT RAISE(ABORT, 'forced'); END;").unwrap();
+        assert!(db.save_liked_snapshot(&["new".into()], &["new-dislike".into()], 2).await.is_err());
+        assert_eq!(db.load_liked_tracks().await.unwrap(), vec!["old"]);
+        assert_eq!(db.load_setting::<Vec<String>>("disliked_track_ids").await.unwrap().unwrap(), vec!["old-dislike"]);
+        assert_eq!(db.load_setting::<u64>("liked_tracks_revision").await.unwrap(), Some(1));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn fallback_pull_clears_revision_with_the_tracks() {
+        let mut db = memory_db();
+        db.save_liked_snapshot(&["old".into()], &[], 1).await.unwrap();
+        db.save_liked_tracks(&["new".into()]).await.unwrap();
+        assert_eq!(db.load_liked_tracks().await.unwrap(), vec!["new"]);
+        assert_eq!(db.load_setting::<u64>("liked_tracks_revision").await.unwrap(), None);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn metadata_batch_rolls_back_and_preserves_duplicate_order() {
+        let mut db = memory_db();
+        db.upsert_track_metadata_batch(&[metadata("a", "old"), metadata("b", "other")]).await.unwrap();
+        db.conn.execute_batch("CREATE TRIGGER fail_metadata BEFORE UPDATE ON track_metadata WHEN NEW.title = 'bad' BEGIN SELECT RAISE(ABORT, 'forced'); END;").unwrap();
+        assert!(db.upsert_track_metadata_batch(&[metadata("a", "changed"), metadata("b", "bad")]).await.is_err());
+        let rows = db.get_track_metadata(&["a".into(), "b".into(), "a".into(), "missing".into()]).await.unwrap();
+        assert_eq!(rows.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), ["a", "b", "a"]);
+        assert_eq!(rows[0].title, "old");
+        assert_eq!(rows[2].artists[0].id, "artist");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn repeated_metadata_across_sql_chunks_does_not_duplicate_artists() {
+        let mut db = memory_db();
+        db.upsert_track_metadata_batch(&[metadata("a", "title")]).await.unwrap();
+        let rows = db.get_track_metadata(&vec!["a".into(); 901]).await.unwrap();
+        assert_eq!(rows.len(), 901);
+        assert!(rows.iter().all(|m| m.artists.len() == 1));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn large_metadata_batches_preserve_order_and_updates() {
+        let mut db = memory_db();
+        let items: Vec<_> = (0..1200).map(|i| metadata(&format!("id-{i}"), "initial")).collect();
+        for chunk in items.chunks(200) {
+            db.upsert_track_metadata_batch(chunk).await.unwrap();
+        }
+        db.upsert_track_metadata_batch(&[metadata("id-1199", "updated")]).await.unwrap();
+        let mut ids: Vec<_> = (0..1200).rev().map(|i| format!("id-{i}")).collect();
+        ids.push("id-1199".into());
+        let rows = db.get_track_metadata(&ids).await.unwrap();
+        assert_eq!(rows.len(), ids.len());
+        assert!(rows.iter().zip(&ids).all(|(row, id)| &row.id == id));
+        assert_eq!(rows.first().unwrap().title, "updated");
+        assert_eq!(rows.last().unwrap().title, "updated");
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn old_cache_migrates_and_explicit_flag_survives_reopening() {
         let path = std::env::temp_dir().join(format!("soyam-explicit-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));

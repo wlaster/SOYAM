@@ -1141,6 +1141,30 @@ mod tests {
 mod live_quality_tests {
     use super::*;
     #[tokio::test]
+    #[ignore = "read-only requests using saved account and internet"]
+    async fn live_library_snapshot_and_playlist_read() {
+        let path = std::path::PathBuf::from(std::env::var("APPDATA").unwrap())
+            .join("darkplayoff.yayma.app/yayma/yamusic_v2.db");
+        let db = rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let raw: String = db.query_row("SELECT value FROM app_settings WHERE key='auth_token'", [], |row| row.get(0)).unwrap();
+        let (token, uid): (String, u64) = serde_json::from_str(&raw).unwrap();
+        drop(db);
+        let api = ApiService::new(token, Some(uid)).await.unwrap();
+        let snapshot = api.sync_liked_tracks_collection(None).await.unwrap();
+        assert!(matches!(snapshot, LikedTracksSync::Changed { .. }));
+        let liked = api.fetch_liked_ids().await.unwrap();
+        let playlists = api.fetch_all_playlists().await.unwrap();
+        if let Some(playlist) = playlists.first() {
+            let details = api.fetch_playlist(playlist.kind).await.unwrap();
+            assert_eq!(details.kind, playlist.kind);
+        }
+        if !liked.is_empty() {
+            let tracks = api.fetch_tracks(liked.iter().take(3).cloned().collect()).await.unwrap();
+            assert!(!tracks.is_empty());
+        }
+        println!("Library read: {} liked tracks, {} playlists", liked.len(), playlists.len());
+    }
+    #[tokio::test]
     #[ignore = "uses saved local account and internet"]
     async fn live_quality_and_yandex_audience() {
         let path = std::path::PathBuf::from(std::env::var("APPDATA").unwrap()).join("darkplayoff.yayma.app/yayma/yamusic_v2.db");

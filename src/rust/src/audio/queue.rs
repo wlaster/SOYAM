@@ -125,9 +125,11 @@ mod fetch_policy {
         pending: Vec<WaveTrackEvent>,
         failed: Vec<WaveTrackEvent>,
     ) -> Vec<WaveTrackEvent> {
+        let pending_ids: std::collections::HashSet<&str> =
+            pending.iter().map(|event| event.track_id.as_str()).collect();
         let mut fresh: Vec<WaveTrackEvent> = failed
             .into_iter()
-            .filter(|e| !pending.iter().any(|q| q.track_id == e.track_id))
+            .filter(|event| !pending_ids.contains(event.track_id.as_str()))
             .collect();
         fresh.extend(pending);
         fresh
@@ -253,6 +255,7 @@ impl RecentWaveTracks {
         while self.0.len() > 300 { self.0.pop_front(); }
     }
 
+    #[cfg(test)]
     fn contains(&self, id: &str) -> bool {
         use crate::util::track::CleanId;
         let id = id.to_base_id();
@@ -350,15 +353,23 @@ impl QueueManager {
     }
 
     async fn filter_wave_tracks_inner(&self, tracks: Vector<Track>, keep_current: bool, exclude_recent: bool) -> Vector<Track> {
+        use crate::util::track::CleanId;
+        let current = if keep_current { self.signals.inner.current_track_id.get() } else { None };
+        let blocked: std::collections::HashSet<&str> = if exclude_recent {
+            self.recent_wave_tracks.0.iter().rev().enumerate()
+                .filter(|(age, (_, skipped))| !skipped || *age < 100)
+                .map(|(_, (id, _))| id.as_str()).collect()
+        } else {
+            std::collections::HashSet::new()
+        };
         let tracks: Vector<Track> = tracks.into_iter().filter(|track| {
-            !exclude_recent || (keep_current && self.signals.inner.current_track_id.get().as_deref()
-                .is_some_and(|id| crate::util::track::CleanId::to_base_id(id) == crate::util::track::CleanId::to_base_id(&track.id)))
-                || !self.recent_wave_tracks.contains(&track.id)
+            let id = track.id.to_base_id();
+            current.as_deref().is_some_and(|current_id| current_id.to_base_id() == id)
+                || !blocked.contains(id)
         }).collect();
         let Some(library) = &self.library else { return tracks; };
         let library = library.read().await;
         let seeds = self.signals.wave_seeds();
-        let current = if keep_current { self.signals.inner.current_track_id.get() } else { None };
         filter_wave_likes(tracks, &library.liked, &seeds, current.as_deref())
     }
 

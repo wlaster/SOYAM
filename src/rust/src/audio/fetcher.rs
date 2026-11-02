@@ -374,27 +374,11 @@ impl FetchState {
         &mut self,
         timeout: Duration,
     ) -> Option<(Vec<Track>, Option<Session>, Vec<WaveTrackEvent>)> {
-        if self.task.is_none() {
-            return None;
-        }
-        if !self.is_finished() {
-            // Wait without consuming the handle: `&mut JoinHandle` is itself
-            // a Future, so a timeout leaves `self.task` intact for poll_fetch().
-            if let Some(task) = self.task.as_mut() {
-                let _ = tokio::time::timeout(timeout, &mut *task).await;
-            }
-            if !self.is_finished() {
-                return None;
-            }
-        }
-        self.await_task_inner().await
-    }
-
-    async fn await_task_inner(
-        &mut self,
-    ) -> Option<(Vec<Track>, Option<Session>, Vec<WaveTrackEvent>)> {
-        let task = self.task.take()?;
-        let result = match task.await {
+        // Await the handle exactly once: a successful timeout already
+        // consumes its result. On timeout retain it for the next poll.
+        let result = tokio::time::timeout(timeout, self.task.as_mut()?).await.ok()?;
+        self.task.take();
+        let result = match result {
             Ok(result) => result,
             Err(_) => {
                 self.playlist_failure_requeues = 0;
@@ -492,6 +476,60 @@ impl WaveExtensionHandles {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn completed_wave_fetch_is_consumed_once_while_waiting() {
+        let mut state = FetchState::new();
+        let (release, ready) = tokio::sync::oneshot::channel();
+        state.task = Some(tokio::spawn(async move {
+            let _ = ready.await;
+            FetchTaskResult::Wave {
+                result: Ok((
+                    vec![crate::util::track::test_track("next")],
+                    test_session("b2", Some("session")),
+                )),
+                failed_feedbacks: vec![],
+            }
+        }));
+        tokio::spawn(async move {
+            tokio::task::yield_now().await;
+            let _ = release.send(());
+        });
+
+        let (tracks, session, _) = state
+            .await_task_timeout(Duration::from_secs(1))
+            .await
+            .unwrap();
+        assert_eq!(tracks[0].id, "next");
+        assert_eq!(session.unwrap().batch_id, "b2");
+        assert!(!state.is_fetching());
+    }
+
+    #[tokio::test]
+    async fn timed_out_fetch_can_be_consumed_later() {
+        let mut state = FetchState::new();
+        let (release, ready) = tokio::sync::oneshot::channel();
+        state.task = Some(tokio::spawn(async move {
+            let _ = ready.await;
+            FetchTaskResult::Playlist {
+                ids: vec![],
+                result: Ok(vec![crate::util::track::test_track("next")]),
+            }
+        }));
+
+        assert!(state
+            .await_task_timeout(Duration::from_millis(1))
+            .await
+            .is_none());
+        assert!(state.is_fetching());
+        release.send(()).unwrap();
+        let (tracks, _, _) = state
+            .await_task_timeout(Duration::from_secs(1))
+            .await
+            .unwrap();
+        assert_eq!(tracks[0].id, "next");
+        assert!(!state.is_fetching());
+    }
 
     #[test]
     fn set_pending_ids_rejects_replacement() {

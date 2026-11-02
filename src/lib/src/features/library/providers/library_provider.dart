@@ -766,16 +766,20 @@ Future<int> deleteAllLikedTracksAction(List<SimpleTrackDto> tracks) async {
   if (ctx == null) return 0;
 
   var deleted = 0;
+  var attempted = false;
   final downloadedTracks = downloadedTracksSignal.value;
-  for (final track in tracks) {
-    if (downloadedTracks.contains(track.id)) {
-      await deleteDownloadedTrack(ctx: ctx, trackId: track.id);
-      deleted++;
+  try {
+    for (final track in tracks) {
+      if (downloadedTracks.contains(track.id)) {
+        attempted = true;
+        await deleteDownloadedTrack(ctx: ctx, trackId: track.id);
+        deleted++;
+      }
     }
+  } finally {
+    // Also refresh after a partial deletion followed by an error.
+    if (attempted) unawaited(refreshDownloadedTracks());
   }
-  // Single refresh after the loop: per-track refreshes used to queue
-  // thousands of redundant DB reads on large libraries.
-  if (deleted > 0) unawaited(refreshDownloadedTracks());
 
   return deleted;
 }

@@ -670,7 +670,7 @@ async fn fetch_and_save_missing_metadata(
 
     // Huge libraries can miss thousands of metadata rows (cold DB after
     // reinstall): fetch 50-chunks concurrently instead of one round-trip
-    // at a time. DB writes stay sequential under a single lock hold.
+    // at a time. Persist metadata in bounded transactions.
     let api = ctx.core.api.clone();
     let chunks: Vec<Vec<String>> = missing_ids.chunks(50).map(|c| c.to_vec()).collect();
     let fetched: Vec<Vec<yandex_music::model::track::Track>> =
@@ -682,14 +682,23 @@ async fn fetch_and_save_missing_metadata(
         .collect()
         .await;
 
-    let mut db = ctx.core.db.lock().await;
-    for tracks in fetched {
-        for t in tracks {
-            let metadata_to_save = yandex_track_to_metadata(t);
-            if let Err(e) = db.upsert_track_metadata(metadata_to_save.clone()).await {
-                tracing::error!("Failed to upsert track metadata in DB: {:?}", e);
+    let metadata: Vec<_> = fetched.into_iter().flatten().map(yandex_track_to_metadata).collect();
+    persist_track_metadata(ctx, &metadata).await;
+    for item in metadata {
+        metadata_map.insert(item.id.clone(), item);
+    }
+}
+
+async fn persist_track_metadata(ctx: &AppContext, metadata: &[crate::storage::db::TrackMetadata]) {
+    for chunk in metadata.chunks(200) {
+        let mut db = ctx.core.db.lock().await;
+        if let Err(error) = db.upsert_track_metadata_batch(chunk).await {
+            tracing::warn!(%error, "metadata_batch_failed_retrying_individually");
+            for item in chunk {
+                if let Err(error) = db.upsert_track_metadata(item.clone()).await {
+                    tracing::error!(%error, track_id = %item.id, "metadata_upsert_failed");
+                }
             }
-            metadata_map.insert(metadata_to_save.id.clone(), metadata_to_save);
         }
     }
 }
@@ -757,12 +766,14 @@ pub(crate) async fn build_track_dtos(
     }
 
     // 2. Fetch missing metadata if any
+    let mut missing_seen = foldhash::HashSet::default();
     let missing_ids: Vec<String> = base_ids
         .iter()
         .filter(|id| match metadata_map.get(*id) {
             None => true,
             Some(m) => m.is_explicit.is_none() || m.artists.is_empty() || m.artists.iter().any(|a| a.id.is_empty()),
         })
+        .filter(|id| missing_seen.insert((*id).clone()))
         .cloned()
         .collect();
 
@@ -771,13 +782,22 @@ pub(crate) async fn build_track_dtos(
     // 3. Build DTOs in the caller's order (`base_ids` are already normalized,
     // so the snapshot lookup is a plain `contains`).
     let (liked_set, disliked_set) = ctx.audio.state.read().await.liked.snapshot();
+    metadata_dtos_for_ids(base_ids, &metadata_map, &liked_set, &disliked_set)
+}
+
+fn metadata_dtos_for_ids(
+    base_ids: Vec<String>,
+    metadata_map: &foldhash::HashMap<String, crate::storage::db::TrackMetadata>,
+    liked_set: &foldhash::HashSet<String>,
+    disliked_set: &foldhash::HashSet<String>,
+) -> Vec<SimpleTrackDto> {
     base_ids
         .into_iter()
         .filter_map(|id| {
-            metadata_map.remove(&id).map(|m| {
+            metadata_map.get(&id).map(|m| {
                 let is_liked = liked_set.contains(&id);
                 let is_disliked = disliked_set.contains(&id);
-                metadata_to_dto(m, is_liked, is_disliked)
+                metadata_to_dto(m.clone(), is_liked, is_disliked)
             })
         })
         .collect()
@@ -795,15 +815,8 @@ pub(crate) async fn build_track_dtos_from_server_tracks(
         return Vec::new();
     }
     let ids: Vec<String> = tracks.iter().map(|t| t.id.clone()).collect();
-    {
-        let mut db = ctx.core.db.lock().await;
-        for t in tracks {
-            let m = yandex_track_to_metadata(t);
-            if let Err(e) = db.upsert_track_metadata(m).await {
-                tracing::error!("Failed to upsert track metadata in DB: {:?}", e);
-            }
-        }
-    }
+    let metadata: Vec<_> = tracks.into_iter().map(yandex_track_to_metadata).collect();
+    persist_track_metadata(ctx, &metadata).await;
     build_track_dtos(ctx, ids).await
 }
 
@@ -1011,6 +1024,20 @@ pub async fn get_disliked_tracks(ctx: &AppContext) -> Result<Vec<SimpleTrackDto>
 #[cfg(test)]
 mod explicit_hotfix_tests {
     use super::*;
+
+    #[test]
+    fn metadata_dtos_keep_repeated_tracks_in_order() {
+        let track = crate::util::track::test_track("a");
+        let metadata = yandex_track_to_metadata(track);
+        let mut map = foldhash::HashMap::default();
+        map.insert("a".to_owned(), metadata);
+        let liked = ["a".to_owned()].into_iter().collect();
+        let tracks = metadata_dtos_for_ids(
+            vec!["a".into(), "missing".into(), "a".into()], &map, &liked, &Default::default(),
+        );
+        assert_eq!(tracks.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["a", "a"]);
+        assert!(tracks.iter().all(|t| t.is_liked));
+    }
     #[test]
     fn yandex_explicit_flag_survives_dto_and_metadata_paths() {
         for flag in [false, true] {

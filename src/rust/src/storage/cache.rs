@@ -405,21 +405,49 @@ impl TrackCache {
 
     pub async fn delete_track(&self, track_id: &str) -> Result<(), std::io::Error> {
         // Delete the track file (final + stale partials)
+        let mut first_error = None;
         for (ext, _) in SUPPORTED_TRACK_EXTS {
             let path = self.cache_dir.join(format!("{}.{}", track_id, ext));
-            if path.exists() {
-                let _ = fs::remove_file(path).await;
-            }
             let part = self.cache_dir.join(format!("{}.{}.part", track_id, ext));
-            if part.exists() {
-                let _ = fs::remove_file(part).await;
+            for candidate in [path, part] {
+                if let Err(error) = fs::remove_file(candidate).await
+                    && error.kind() != std::io::ErrorKind::NotFound
+                    && first_error.is_none()
+                {
+                    first_error = Some(error);
+                }
             }
         }
         // Legacy `.aac` files never matched get_track_file — clean them too.
         let legacy = self.cache_dir.join(format!("{}.aac", track_id));
-        if legacy.exists() {
-            let _ = fs::remove_file(legacy).await;
+        if let Err(error) = fs::remove_file(legacy).await
+            && error.kind() != std::io::ErrorKind::NotFound
+            && first_error.is_none()
+        {
+            first_error = Some(error);
         }
-        Ok(())
+        first_error.map_or(Ok(()), Err)
+    }
+}
+
+#[cfg(test)]
+mod track_deletion_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn deletion_reports_error_and_continues_removing_other_files() {
+        let root = std::env::temp_dir().join(format!(
+            "soyam-delete-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        let cache = TrackCache::new(Some(root.clone()));
+        cache.init().await.unwrap();
+        fs::write(cache.cache_dir.join("track.flac"), b"audio").await.unwrap();
+        fs::create_dir(cache.cache_dir.join("track.mp3")).await.unwrap();
+        assert!(cache.delete_track("track").await.is_err());
+        assert!(!cache.cache_dir.join("track.flac").exists());
+        fs::remove_dir(cache.cache_dir.join("track.mp3")).await.unwrap();
+        assert!(cache.delete_track("track").await.is_ok());
+        fs::remove_dir_all(root).await.unwrap();
     }
 }

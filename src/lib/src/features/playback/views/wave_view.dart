@@ -270,21 +270,6 @@ class WaveSettingsPanel extends StatelessWidget {
             final catsFuture = waveStationsSignal.value;
             final labels = <String, String>{
               'user:onyourwave': 'Моя волна',
-              'activity:wake-up': 'Просыпаюсь',
-              'activity:road-trip': 'В дороге',
-              'activity:work-background': 'Работаю',
-              'activity:workout': 'Тренируюсь',
-              'activity:fall-asleep': 'Засыпаю',
-              'personal:collection': 'Любимое',
-              'personal:never-heard': 'Незнакомое',
-              'personal:hits': 'Популярное',
-              'mood:energetic': 'Бодрое',
-              'mood:happy': 'Весёлое',
-              'mood:calm': 'Спокойное',
-              'mood:sad': 'Грустное',
-              'local-language:russian': 'Русский',
-              'local-language:english': 'Иностранный',
-              'local-language:instrumental': 'Без слов',
               for (final cat in catsFuture.value ?? <StationCategoryDto>[])
                 for (final item in cat.items) item.seed: item.label,
             };
