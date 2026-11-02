@@ -54,6 +54,7 @@ class AppContextMenu<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MenuAnchor(
+      animated: true,
       onOpen: onOpen,
       onClose: onClose,
       style: MenuStyle(

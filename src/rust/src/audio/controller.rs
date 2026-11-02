@@ -452,6 +452,9 @@ impl AudioController {
                     }
                 }
                 Err(e) => {
+                    if generation.load(Ordering::SeqCst) != my_generation {
+                        return;
+                    }
                     if stream_error_retries.load(Ordering::SeqCst) < 2
                         && reload_in_flight
                             .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst)

@@ -32,4 +32,33 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'window width: $width');
     }
   });
+  testWidgets('artist header actions respond to taps', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1100, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    var presses = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CommonDetailHeader(
+            title: 'Artist',
+            isCircle: true,
+            coverSize: 200,
+            subtitle: 'Listeners',
+            secondarySubtitle: 'Likes',
+            actions: [
+              TextButton(
+                onPressed: () => presses++,
+                child: const Text('Listen'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Listen'));
+    expect(presses, 1);
+    expect(tester.takeException(), isNull);
+  });
 }

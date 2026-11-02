@@ -239,6 +239,28 @@ impl QueueSignals {
     }
 }
 
+// Recent wave outcomes are independent of the navigation history and survive
+// station changes. A skipped track expires after 100 newer unique outcomes.
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+struct RecentWaveTracks(VecDeque<(String, bool)>);
+
+impl RecentWaveTracks {
+    fn record(&mut self, id: &str, skipped: bool) {
+        use crate::util::track::CleanId;
+        let id = id.to_base_id().to_string();
+        self.0.retain(|(old, _)| old != &id);
+        self.0.push_back((id, skipped));
+        while self.0.len() > 300 { self.0.pop_front(); }
+    }
+
+    fn contains(&self, id: &str) -> bool {
+        use crate::util::track::CleanId;
+        let id = id.to_base_id();
+        self.0.iter().rev().enumerate().any(|(age, (old, skipped))|
+            old == id && (!skipped || age < 100))
+    }
+}
+
 pub struct QueueManager {
     api: Arc<ApiService>,
     library: Option<Arc<tokio::sync::RwLock<crate::audio::state::SystemState>>>,
@@ -259,6 +281,8 @@ pub struct QueueManager {
     wave_buffer: VecDeque<Track>,
     wave_feedbacks: Vec<WaveTrackEvent>,
     wave_feedback_sent: bool,
+    recent_wave_tracks: RecentWaveTracks,
+    recent_wave_save: Option<tokio::sync::mpsc::UnboundedSender<RecentWaveTracks>>,
     track_progress: Arc<TrackProgress>,
     /// Bumped on every load()/clear() to invalidate stale background tasks
     /// (wave_by_seed session creation).
@@ -288,8 +312,32 @@ impl QueueManager {
             wave_buffer: VecDeque::new(),
             wave_feedbacks: Vec::new(),
             wave_feedback_sent: false,
+            recent_wave_tracks: RecentWaveTracks::default(),
+            recent_wave_save: None,
             track_progress,
             generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        }
+    }
+
+    pub async fn init_recent_wave_tracks(&mut self, db: Arc<tokio::sync::Mutex<crate::db::AppDatabase>>) {
+        self.recent_wave_tracks = db.lock().await.load_setting("recent_wave_tracks_v1")
+            .await.ok().flatten().unwrap_or_default();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<RecentWaveTracks>();
+        tokio::spawn(async move {
+            while let Some(mut recent) = rx.recv().await {
+                while let Ok(newer) = rx.try_recv() { recent = newer; }
+                if let Err(error) = db.lock().await.save_setting("recent_wave_tracks_v1", &recent).await {
+                    error!(?error, "wave_history_save_failed");
+                }
+            }
+        });
+        self.recent_wave_save = Some(tx);
+    }
+
+    fn remember_wave_outcome(&mut self, track: &Track, skipped: bool) {
+        self.recent_wave_tracks.record(&track.id, skipped);
+        if let Some(tx) = &self.recent_wave_save {
+            let _ = tx.send(self.recent_wave_tracks.clone());
         }
     }
 
@@ -298,6 +346,15 @@ impl QueueManager {
     }
 
     async fn filter_wave_tracks(&self, tracks: Vector<Track>, keep_current: bool) -> Vector<Track> {
+        self.filter_wave_tracks_inner(tracks, keep_current, true).await
+    }
+
+    async fn filter_wave_tracks_inner(&self, tracks: Vector<Track>, keep_current: bool, exclude_recent: bool) -> Vector<Track> {
+        let tracks: Vector<Track> = tracks.into_iter().filter(|track| {
+            !exclude_recent || (keep_current && self.signals.inner.current_track_id.get().as_deref()
+                .is_some_and(|id| crate::util::track::CleanId::to_base_id(id) == crate::util::track::CleanId::to_base_id(&track.id)))
+                || !self.recent_wave_tracks.contains(&track.id)
+        }).collect();
         let Some(library) = &self.library else { return tracks; };
         let library = library.read().await;
         let seeds = self.signals.wave_seeds();
@@ -343,6 +400,7 @@ impl QueueManager {
         mut start_index: usize,
         keep_current: bool,
     ) -> Option<Track> {
+        let fallback_tracks = if matches!(&context, PlaybackContext::Wave(_)) { tracks.clone() } else { Vector::new() };
         let tracks = if matches!(&context, PlaybackContext::Wave(_)) {
             self.filter_wave_tracks(tracks, keep_current).await
         } else { tracks };
@@ -450,6 +508,9 @@ impl QueueManager {
                 if tokio::time::timeout_at(deadline, self.consume_fetch_result()).await.is_err() { break; }
                 if !self.signals.queue().is_empty() { break; }
             }
+        }
+        if self.in_wave() && self.signals.queue().is_empty() && !fallback_tracks.is_empty() {
+            self.wave_append_inner(fallback_tracks.into_iter().collect(), false).await;
         }
         if keep_shuffle { self.toggle_shuffle(); }
         let start = self.signals.index();
@@ -583,6 +644,7 @@ impl QueueManager {
         // the caller treats None as queue end for now.
         if self.in_wave() && !self.fetch.is_fetching() { self.trigger_fetch(); }
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut fallback_tracks = Vec::new();
         for _ in 0..4 {
             if self.fetch.is_fetching()
                 && let Some((new_tracks, session, failed_feedbacks)) = self
@@ -598,6 +660,7 @@ impl QueueManager {
                         .remember_wave_batch(&session.batch_id, &new_tracks);
                 }
                 if !new_tracks.is_empty() {
+                    fallback_tracks = new_tracks.clone();
                     self.wave_append(new_tracks).await;
                     let queue_len = self.signals.queue().len();
                     if let Some(next) = PlaybackPolicy::try_advance(current, queue_len) {
@@ -607,6 +670,12 @@ impl QueueManager {
             }
             if !self.in_wave() || tokio::time::Instant::now() >= deadline { break; }
             self.trigger_fetch();
+        }
+        if !fallback_tracks.is_empty() {
+            self.wave_append_inner(fallback_tracks, false).await;
+            if let Some(next) = PlaybackPolicy::try_advance(current, self.signals.queue().len()) {
+                return self.advance_to(next);
+            }
         }
         None
     }
@@ -621,6 +690,7 @@ impl QueueManager {
         }
         if self.in_wave() && !self.wave_feedback_sent {
             if let Some(track) = self.signals.queue().get(self.signals.index()).cloned() {
+                self.remember_wave_outcome(&track, true);
                 self.wave_feedbacks.push(wave_feedback::build_event(
                     &track,
                     WaveTrackOutcome::Skipped,
@@ -650,6 +720,7 @@ impl QueueManager {
                 self.wave_feedback_sent = true;
                 return;
             }
+            self.remember_wave_outcome(&track, false);
             self.wave_feedbacks.push(wave_feedback::build_event(
                 &track,
                 WaveTrackOutcome::Finished,
@@ -936,16 +1007,20 @@ impl QueueManager {
     }
 
     async fn wave_append(&mut self, tracks: Vec<Track>) {
+        self.wave_append_inner(tracks, true).await;
+    }
+
+    async fn wave_append_inner(&mut self, tracks: Vec<Track>, exclude_recent: bool) {
         let tracks: Vec<Track> = if self.in_wave() {
-            self.filter_wave_tracks(tracks.into_iter().collect(), false).await.into_iter().collect()
+            self.filter_wave_tracks_inner(tracks.into_iter().collect(), false, exclude_recent).await.into_iter().collect()
         } else { tracks };
         if self.in_wave() {
             let mut known_ids: std::collections::HashSet<String> =
-                self.signals.queue().iter().map(|t| t.id.clone()).collect();
-            known_ids.extend(self.wave_buffer.iter().map(|t| t.id.clone()));
+                self.signals.queue().iter().skip(self.signals.index()).map(|t| crate::util::track::CleanId::to_base_id(&t.id).to_string()).collect();
+            known_ids.extend(self.wave_buffer.iter().map(|t| crate::util::track::CleanId::to_base_id(&t.id).to_string()));
 
             for track in tracks {
-                if !known_ids.insert(track.id.clone()) {
+                if !known_ids.insert(crate::util::track::CleanId::to_base_id(&track.id).to_string()) {
                     continue;
                 }
                 let current_index = self.signals.index();
@@ -1332,6 +1407,39 @@ mod tests {
         q.toggle_shuffle();
         assert_eq!(q.get_next_track().await.unwrap().id, "t1");
         assert_eq!(q.get_next_track().await.unwrap().id, "t2");
+    }
+
+    #[tokio::test]
+    async fn wave_recent_filter_and_fallback_still_block_dislikes() {
+        let mut q = manager().await;
+        let library = Arc::new(tokio::sync::RwLock::new(crate::audio::state::SystemState::default()));
+        library.write().await.liked.set_dislike_status("blocked", true);
+        q.set_library(library);
+        q.recent_wave_tracks.record("recent:1", false);
+        let tracks: Vector<Track> = ["recent:2", "blocked", "fresh"].into_iter().map(test_track).collect();
+        let filtered = q.filter_wave_tracks(tracks.clone(), false).await;
+        assert_eq!(filtered.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["fresh"]);
+        let fallback = q.filter_wave_tracks_inner(tracks, false, false).await;
+        assert_eq!(fallback.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["recent:2", "fresh"]);
+    }
+
+    #[test]
+    fn recent_wave_outcomes_expire_and_normalize_ids() {
+        let mut recent = RecentWaveTracks::default();
+        recent.record("123:45", true);
+        assert!(recent.contains("123:99"));
+        for i in 0..99 { recent.record(&format!("track{i}"), false); }
+        assert!(recent.contains("123"));
+        recent.record("next", false);
+        assert!(!recent.contains("123"));
+        recent.record("123", false);
+        for i in 0..299 { recent.record(&format!("new{i}"), false); }
+        assert!(recent.contains("123"));
+        recent.record("last", false);
+        assert!(!recent.contains("123"));
+        let saved = serde_json::to_string(&recent).unwrap();
+        let loaded: RecentWaveTracks = serde_json::from_str(&saved).unwrap();
+        assert!(loaded.contains("last"));
     }
 
     #[tokio::test]

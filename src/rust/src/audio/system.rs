@@ -132,6 +132,8 @@ impl AudioSystem {
             track_progress_inner,
         );
 
+        queue.init_recent_wave_tracks(db.clone()).await;
+
         let state = Arc::new(RwLock::new(SystemState::default()));
         queue.set_library(state.clone());
 

@@ -165,7 +165,6 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                 },
                 onClose: () {
                   _isMenuOpen.value = false;
-                  _isHovered.value = false;
                 },
                 onSelected: (value) async {
                   if (!mounted) return;

@@ -197,7 +197,7 @@ class CommonDetailHeader extends StatelessWidget {
 
     final actualCoverSize = isNarrow
         ? (screenWidth - 80).clamp(150.0, 200.0)
-        : coverSize;
+        : (isCircle ? 250.0 : coverSize);
 
     final titleWidget = Transform.translate(
       offset: Offset(0, titleOffsetY),
@@ -328,15 +328,8 @@ class CommonDetailHeader extends StatelessWidget {
                     ),
                   ),
                 ),
-                SizedBox(width: 40 + (isCircle ? 250 - actualCoverSize : 0)),
-                Expanded(
-                  child: isCircle
-                      ? Transform.translate(
-                          offset: Offset(0, 250 - actualCoverSize),
-                          child: content,
-                        )
-                      : content,
-                ),
+                const SizedBox(width: 40),
+                Expanded(child: content),
               ],
             ),
     );

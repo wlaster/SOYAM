@@ -119,6 +119,8 @@ pub struct StreamManager {
     url_cache: UrlCache,
     track_cache: Arc<TrackCache>,
     prewarm_cache: Arc<Mutex<PrewarmCache>>,
+    prewarm_slots: Arc<tokio::sync::Semaphore>,
+    decoder_slots: Arc<tokio::sync::Semaphore>,
     http_client: reqwest::Client,
 }
 
@@ -142,6 +144,8 @@ impl StreamManager {
             url_cache,
             track_cache,
             prewarm_cache: Arc::new(Mutex::new(PrewarmCache::default())),
+            prewarm_slots: Arc::new(tokio::sync::Semaphore::new(MAX_PREWARM_ENTRIES)),
+            decoder_slots: Arc::new(tokio::sync::Semaphore::new(2)),
             http_client,
         }
     }
@@ -158,6 +162,12 @@ impl StreamManager {
         drop(cache);
         let this = self.clone();
         tokio::spawn(async move {
+            // Evicted tasks still run until their network/decoder work completes.
+            // Keep a real concurrency limit and discard stale waiters before I/O.
+            let Ok(_permit) = this.prewarm_slots.acquire().await else { return; };
+            if this.prewarm_cache.lock().in_flight.get(&track.id) != Some(&generation) {
+                return;
+            }
             let result = match this.create_stream_session(&track).await {
                 Ok(session) => Some(session),
                 Err(e) => {
@@ -228,7 +238,9 @@ impl StreamManager {
                 ));
             }
 
+            let permit = self.decoder_slots.clone().acquire_owned().await?;
             let session = tokio::task::spawn_blocking(move || {
+                let _permit = permit;
                 stream::create_streaming_session(file, total_bytes, codec_clone, progress_clone)
             })
             .await
@@ -287,7 +299,9 @@ impl StreamManager {
         let codec_clone = codec.clone();
 
         let total_bytes = data_source.total_bytes();
+        let permit = self.decoder_slots.clone().acquire_owned().await?;
         let session = tokio::task::spawn_blocking(move || {
+            let _permit = permit;
             stream::create_streaming_session(data_source, total_bytes, codec_clone, progress_clone)
         })
         .await
