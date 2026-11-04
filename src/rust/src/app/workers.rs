@@ -3,6 +3,19 @@ use crate::app::{AppContext, SETTINGS_CHANGED};
 use crate::audio::commands::AudioMessage;
 use tokio::sync::watch;
 
+#[cfg(target_os = "windows")]
+fn app_is_foreground() -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+    let mut process_id = 0;
+    unsafe {
+        GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut process_id));
+    }
+    process_id == std::process::id()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn app_is_foreground() -> bool { true }
+
 pub fn spawn_sync_worker(ctx: AppContext, mut shutdown_rx: watch::Receiver<bool>) {
     tokio::spawn(async move {
         let _ = ctx.audio.tx.send(AudioMessage::SyncLiked).await;
@@ -46,6 +59,7 @@ pub fn spawn_bridge_worker(ctx: AppContext, mut shutdown_rx: watch::Receiver<boo
         let mut changed_rx = audio_signals.changed_rx.clone();
         let mut progress_rx = audio_signals.progress_rx.clone();
         let mut vibe_interval = tokio::time::interval(tokio::time::Duration::from_millis(33));
+        let mut focus_interval = tokio::time::interval(tokio::time::Duration::from_millis(500));
         let mut save_interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
         let mut last_saved_position_ms = 0u64;
 
@@ -81,11 +95,11 @@ pub fn spawn_bridge_worker(ctx: AppContext, mut shutdown_rx: watch::Receiver<boo
                         duration_ms: dur as u32,
                     }));
                 }
-                _ = vibe_interval.tick() => {
+                _ = vibe_interval.tick(), if audio_signals.vibe_enabled.get() && audio_signals.monitor.is_focused() => {
                     // Shader is disabled — skip tick computation entirely
                     // (VibeEngine::tick + event dispatch), instead of merely
                     // dropping it on the Dart side.
-                    if !audio_signals.vibe_enabled.get() {
+                    if !audio_signals.vibe_enabled.get() || !audio_signals.monitor.is_focused() {
                         continue;
                     }
                     let is_playing = audio_signals.is_playing.get();
@@ -98,6 +112,9 @@ pub fn spawn_bridge_worker(ctx: AppContext, mut shutdown_rx: watch::Receiver<boo
                         let uniforms = vibe.tick(bands);
                         ctx.send_event(AppEvent::VibeTick(uniforms));
                     }
+                }
+                _ = focus_interval.tick(), if cfg!(target_os = "windows") => {
+                    audio_signals.monitor.set_focused(app_is_foreground());
                 }
                 _ = save_interval.tick() => {
                     // Periodically save position during playback

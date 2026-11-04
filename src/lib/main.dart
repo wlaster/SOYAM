@@ -17,6 +17,9 @@ import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  PaintingBinding.instance.imageCache
+    ..maximumSize = 300
+    ..maximumSizeBytes = 64 * 1024 * 1024;
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks([
       'Google Sans',
@@ -129,13 +132,15 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: theme,
           builder: (context, child) {
-            return AnimatedTheme(
-              data: theme,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-              child: RepaintBoundary(
-                child: GlobalNotificationListener(
-                  child: child ?? const SizedBox.shrink(),
+            return _ForegroundAnimations(
+              child: AnimatedTheme(
+                data: theme,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+                child: RepaintBoundary(
+                  child: GlobalNotificationListener(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
             );
@@ -341,4 +346,44 @@ class MyApp extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ForegroundAnimations extends StatefulWidget {
+  const _ForegroundAnimations({required this.child});
+  final Widget child;
+
+  @override
+  State<_ForegroundAnimations> createState() => _ForegroundAnimationsState();
+}
+
+class _ForegroundAnimationsState extends State<_ForegroundAnimations>
+    with WidgetsBindingObserver {
+  bool _active = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final state = WidgetsBinding.instance.lifecycleState;
+    _active = state == null || state == AppLifecycleState.resumed;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final active = state == AppLifecycleState.resumed;
+    if (!active && _active) {
+      PaintingBinding.instance.imageCache.clear();
+    }
+    if (_active != active) setState(() => _active = active);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      TickerMode(enabled: _active, child: widget.child);
 }

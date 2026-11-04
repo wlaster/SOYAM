@@ -160,6 +160,49 @@ void main() {
     },
   );
 
+  testWidgets(
+    'manual scrolling shows all lines and resumes following playback',
+    (tester) async {
+      playerProgressSignal.value = const PlaybackProgressDto(
+        positionMs: 0,
+        durationMs: 180000,
+      );
+      final lines = List.generate(
+        20,
+        (i) => LyricLine(
+          Duration(seconds: i * 10),
+          'Line $i',
+          const Duration(seconds: 10),
+        ),
+      );
+      await show(tester, LyricsResult(lines, 'Test'));
+      final list = find.byKey(const ValueKey('synced_lyrics'));
+      final controller = tester.widget<ListView>(list).controller!;
+      await tester.drag(list, const Offset(0, -350));
+      await tester.pump(const Duration(milliseconds: 500));
+      final readingOffset = controller.offset;
+      expect(readingOffset, greaterThan(0));
+      final visible = find.byKey(const ValueKey('lyric_3'));
+      expect(visible, findsOneWidget);
+      final opacity = find.descendant(
+        of: visible,
+        matching: find.byType(AnimatedOpacity),
+      );
+      expect(tester.widget<AnimatedOpacity>(opacity.first).opacity, 1);
+      playerProgressSignal.value = const PlaybackProgressDto(
+        positionMs: 15000,
+        durationMs: 180000,
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(controller.offset, closeTo(readingOffset, 1));
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(controller.offset, lessThan(readingOffset));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('word timestamps never split or advance the displayed line', (
     tester,
   ) async {

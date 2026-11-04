@@ -253,7 +253,9 @@ impl Monitor {
 
     #[inline]
     pub fn process_block(&self, left: &[f32], right: &[f32]) {
-        if !self.internal.enabled.load(Ordering::Relaxed) {
+        if !self.internal.enabled.load(Ordering::Relaxed)
+            || !self.internal.focused.load(Ordering::Relaxed)
+        {
             return;
         }
 
@@ -393,6 +395,20 @@ impl Clone for Monitor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn background_skips_analysis_and_foreground_resumes() {
+        let monitor = Monitor::new(1024);
+        let block = vec![0.5; 256];
+        monitor.set_focused(false);
+        monitor.process_block(&block, &block);
+        assert_eq!(monitor.position(), 0);
+        assert_eq!(monitor.vibe_bands(), [0.0; 3]);
+        monitor.set_focused(true);
+        monitor.process_block(&block, &block);
+        assert_eq!(monitor.position(), 256);
+        assert!(monitor.vibe_bands()[0] > 0.0);
+    }
 
     #[test]
     fn vibe_bands_read_is_non_destructive() {

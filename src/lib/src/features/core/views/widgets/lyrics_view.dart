@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:m3e_core/m3e_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:signals_flutter/signals_flutter.dart';
@@ -60,6 +61,8 @@ class _LyricsWidgetState extends State<LyricsWidget> {
   final FlutterSignal<bool> _visibleSignal = signal<bool>(false);
 
   bool _initialScrollDone = false;
+  bool _manualReading = false;
+  Timer? _manualReadingTimer;
   List<double> _lineOffsets = [];
   double? _viewportTop;
   FutureSignal<LyricsResult> get _result =>
@@ -117,6 +120,8 @@ class _LyricsWidgetState extends State<LyricsWidget> {
   void didUpdateWidget(LyricsWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.trackId != oldWidget.trackId) {
+      _manualReadingTimer?.cancel();
+      _manualReading = false;
       _initialScrollDone = !widget.visible;
       _activeIndexSignal.value = -1;
       hideLyricsOverlaySignal.value = false;
@@ -125,6 +130,10 @@ class _LyricsWidgetState extends State<LyricsWidget> {
       _visibleSignal.value = widget.visible;
     } else if (widget.visible != oldWidget.visible) {
       _visibleSignal.value = widget.visible;
+      if (!widget.visible) {
+        _manualReadingTimer?.cancel();
+        _manualReading = false;
+      }
       if (widget.visible) {
         _initialScrollDone = false;
       }
@@ -133,6 +142,7 @@ class _LyricsWidgetState extends State<LyricsWidget> {
 
   @override
   void dispose() {
+    _manualReadingTimer?.cancel();
     _progressSubscriptionCleanup?.call();
     _loadingTrackingCleanup?.call();
     _scrollController.dispose();
@@ -142,7 +152,7 @@ class _LyricsWidgetState extends State<LyricsWidget> {
   double get _rowHeight => Platform.isAndroid ? 60.0 : 110.0;
 
   void _scrollToIndex(int index) {
-    if (_scrollController.hasClients) {
+    if (!_manualReading && widget.visible && _scrollController.hasClients) {
       final targetScroll =
           (index < _lineOffsets.length
                   ? _lineOffsets[index]
@@ -164,6 +174,36 @@ class _LyricsWidgetState extends State<LyricsWidget> {
         );
       }
     }
+  }
+
+  bool _handleManualScroll(ScrollNotification notification) {
+    if (notification.depth != 0) return false;
+    final userStarted =
+        notification is UserScrollNotification &&
+        notification.direction != ScrollDirection.idle;
+    final dragging =
+        notification is ScrollStartNotification &&
+        notification.dragDetails != null;
+    if (userStarted || dragging) {
+      if (!_manualReading) setState(() => _manualReading = true);
+    }
+    if (_manualReading &&
+        (userStarted ||
+            dragging ||
+            notification is ScrollUpdateNotification ||
+            notification is ScrollEndNotification)) {
+      _manualReadingTimer?.cancel();
+      _manualReadingTimer = Timer(const Duration(seconds: 3), () {
+        if (!mounted || !widget.visible) return;
+        setState(() => _manualReading = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _activeIndexSignal.value >= 0) {
+            _scrollToIndex(_activeIndexSignal.value);
+          }
+        });
+      });
+    }
+    return false;
   }
 
   Widget _sourceControls(LyricsResult? result) {
@@ -202,6 +242,8 @@ class _LyricsWidgetState extends State<LyricsWidget> {
                       ),
                 ],
                 onSelected: (source) {
+                  _manualReadingTimer?.cancel();
+                  _manualReading = false;
                   _initialScrollDone = false;
                   hideLyricsOverlaySignal.value = false;
                   if (lyricsSourceSignal.value == source) {
@@ -390,7 +432,8 @@ class _LyricsWidgetState extends State<LyricsWidget> {
                             builder: (context) {
                               final activeIndex = _activeIndexSignal.value;
 
-                              if (activeIndex != -1 &&
+                              if (!_manualReading &&
+                                  activeIndex != -1 &&
                                   (Platform.isAndroid ||
                                       _viewportTop != null)) {
                                 WidgetsBinding.instance.addPostFrameCallback((
@@ -417,43 +460,47 @@ class _LyricsWidgetState extends State<LyricsWidget> {
                                   behavior: ScrollConfiguration.of(
                                     context,
                                   ).copyWith(scrollbars: false),
-                                  child: ListView.builder(
-                                    controller: _scrollController,
-                                    physics: const ClampingScrollPhysics(),
-                                    itemCount: lines.length,
-                                    padding: EdgeInsets.only(
-                                      top: (anchor - heights.first / 2).clamp(
-                                        0.0,
-                                        double.infinity,
-                                      ),
-                                      bottom: (viewportHeight - anchor).clamp(
-                                        0.0,
-                                        double.infinity,
-                                      ),
-                                    ),
-                                    itemBuilder: (context, index) {
-                                      final item = lines[index];
-                                      final isActive = index == activeIndex;
-                                      final distance = (index - activeIndex)
-                                          .abs();
-
-                                      return Semantics(
-                                        key: ValueKey('lyric_$index'),
-                                        selected: isActive,
-                                        child: SizedBox(
-                                          height: heights[index],
-                                          child: _LyricRow(
-                                            key: ValueKey(
-                                              '${widget.trackId}_$index',
-                                            ),
-                                            item: item,
-                                            isActive: isActive,
-                                            distance: distance,
+                                  child:
+                                      NotificationListener<ScrollNotification>(
+                                        onNotification: _handleManualScroll,
+                                        child: ListView.builder(
+                                          key: const ValueKey('synced_lyrics'),
+                                          controller: _scrollController,
+                                          physics:
+                                              const ClampingScrollPhysics(),
+                                          itemCount: lines.length,
+                                          padding: EdgeInsets.only(
+                                            top: (anchor - heights.first / 2)
+                                                .clamp(0.0, double.infinity),
+                                            bottom: (viewportHeight - anchor)
+                                                .clamp(0.0, double.infinity),
                                           ),
+                                          itemBuilder: (context, index) {
+                                            final item = lines[index];
+                                            final isActive =
+                                                index == activeIndex;
+                                            final distance =
+                                                (index - activeIndex).abs();
+
+                                            return Semantics(
+                                              key: ValueKey('lyric_$index'),
+                                              selected: isActive,
+                                              child: SizedBox(
+                                                height: heights[index],
+                                                child: _LyricRow(
+                                                  key: ValueKey(
+                                                    '${widget.trackId}_$index',
+                                                  ),
+                                                  item: item,
+                                                  isActive: isActive,
+                                                  distance: distance,
+                                                  manualReading: _manualReading,
+                                                ),
+                                              ),
+                                            );
+                                          },
                                         ),
-                                      );
-                                    },
-                                  ),
+                                      ),
                                 ),
                               );
                             },
@@ -566,11 +613,13 @@ class _LyricRow extends StatelessWidget {
   final LyricItem item;
   final bool isActive;
   final int distance;
+  final bool manualReading;
 
   const _LyricRow({
     required this.item,
     required this.isActive,
     required this.distance,
+    required this.manualReading,
     super.key,
   });
 
@@ -578,6 +627,7 @@ class _LyricRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final onSurface = Theme.of(context).colorScheme.onSurface;
     if (item is LyricTimer) {
+      if (manualReading) return const SizedBox.shrink();
       return _LyricTimerWidget(item: item as LyricTimer, isActive: isActive);
     }
 
@@ -586,7 +636,7 @@ class _LyricRow extends StatelessWidget {
     var scale = 1.0;
     var blur = 0.0;
 
-    if (isActive) {
+    if (isActive || manualReading) {
       opacity = 1.0;
       scale = 1.0;
       blur = 0.0;
@@ -633,8 +683,10 @@ class _LyricRow extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: _lyricTextStyle(
                     color: onSurface,
-                    fontWeight: isActive ? FontWeight.w900 : FontWeight.w800,
-                    glow: isActive
+                    fontWeight: isActive && !manualReading
+                        ? FontWeight.w900
+                        : FontWeight.w800,
+                    glow: isActive && !manualReading
                         ? Shadow(
                             color: onSurface.withValues(alpha: 0.3),
                             blurRadius: 20,

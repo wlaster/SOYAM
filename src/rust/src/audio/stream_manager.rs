@@ -320,6 +320,48 @@ impl StreamManager {
 mod tests {
     use super::{PrewarmCache, AudioQuality};
 
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "uses saved account and network; decodes audio without playback"]
+    async fn live_decode_and_seek_all_quality_levels() {
+        use crate::audio::fx::BlockSource;
+        use std::time::Duration;
+
+        let path = std::path::PathBuf::from(std::env::var("APPDATA").unwrap())
+            .join("darkplayoff.yayma.app/yayma/yamusic_v2.db");
+        let db = rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let raw: String = db.query_row("SELECT value FROM app_settings WHERE key='auth_token'", [], |row| row.get(0)).unwrap();
+        let (token, uid): (String, u64) = serde_json::from_str(&raw).unwrap();
+        let ids: Vec<String> = db.prepare("SELECT track_id FROM track_metadata LIMIT 3").unwrap()
+            .query_map([], |row| row.get(0)).unwrap().collect::<rusqlite::Result<_>>().unwrap();
+        assert!(!ids.is_empty(), "no tracks available for testing");
+        drop(db);
+        let api = std::sync::Arc::new(crate::http::ApiService::new(token, Some(uid)).await.unwrap());
+        let cache = std::sync::Arc::new(crate::storage::cache::TrackCache::new(Some(std::env::temp_dir().join("soyam-quality-read-only-test"))));
+        let manager = super::StreamManager::new(api.clone(), crate::audio::cache::UrlCache::new(), cache);
+        for quality in [AudioQuality::Low, AudioQuality::Normal, AudioQuality::High] {
+            api.set_quality(quality);
+            for id in &ids {
+                let track = crate::util::track::test_track(id);
+                let prepared = tokio::time::timeout(Duration::from_secs(30), manager.create_stream_session(&track))
+                    .await.expect("stream initialization timed out").expect("stream initialization failed");
+                let codec = prepared.codec.clone();
+                let samples = tokio::time::timeout(Duration::from_secs(30), tokio::task::spawn_blocking(move || {
+                    use rodio::Source;
+                    let mut source = prepared.session.source;
+                    let mut buffer = vec![0.0; 16384];
+                    let first = source.read_chunk(&mut buffer);
+                    assert!(buffer[..first].iter().all(|v| v.is_finite()));
+                    source.try_seek(Duration::from_secs(10)).expect("seek failed");
+                    let after_seek = source.read_chunk(&mut buffer);
+                    assert!(buffer[..after_seek].iter().all(|v| v.is_finite()));
+                    (first, after_seek)
+                })).await.expect("decoding timed out").expect("decoder task failed");
+                assert!(samples.0 > 0 && samples.1 > 0, "stream returned no audio");
+                println!("{quality:?}: codec={codec}; decoded and sought successfully");
+            }
+        }
+    }
+
     #[test]
     fn next_track_prepares_while_current_session_is_still_reserved() {
         let mut cache = PrewarmCache::default();

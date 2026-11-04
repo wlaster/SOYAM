@@ -15,7 +15,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>
 
 const PCM_CHUNK_SAMPLES: usize = 16384;
 
-const SAMPLE_CHANNEL_CAPACITY: usize = 64;
+const SAMPLE_CHANNEL_CAPACITY: usize = 32;
 
 enum SampleMessage {
     Samples(Vec<f32>, u64),

@@ -29,6 +29,36 @@ const MAX_ATTEMPTS: usize = 20; // 10 seconds total while waiting for a range
 const RANGE_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_RANGE_RETRIES: usize = 3;
 
+fn initial_buffer_bytes(total: u64, duration_ms: Option<u64>) -> usize {
+    duration_ms
+        .filter(|duration| *duration > 0)
+        .map(|duration| {
+            ((total as f64 * INITIAL_BUFFER_SECONDS as f64 * 1000.0 / duration as f64) as usize)
+                .max(MIN_INITIAL_DATA)
+                .min(total as usize)
+        })
+        .unwrap_or(MIN_INITIAL_DATA.min(total as usize))
+}
+
+fn buffer_capacity(target: usize, initial_required: usize) -> usize {
+    target.clamp(2 * 1024 * 1024, 16 * 1024 * 1024).max(initial_required)
+}
+
+#[cfg(test)]
+mod buffer_sizing_tests {
+    use super::*;
+
+    #[test]
+    fn startup_buffer_fits_short_and_high_bitrate_tracks() {
+        let short = initial_buffer_bytes(100, None);
+        assert_eq!(short, 100);
+        let initial = initial_buffer_bytes(100 * 1024 * 1024, Some(20_000));
+        assert!(initial > 16 * 1024 * 1024);
+        assert!(buffer_capacity(100 * 1024 * 1024, initial) >= initial);
+        assert_eq!(buffer_capacity(0, short), 2 * 1024 * 1024);
+    }
+}
+
 enum FetchCommand {
     Fetch {
         start: u64,
@@ -101,6 +131,8 @@ impl StreamingDataSource {
 
         progress.set_total_bytes(total);
 
+        let initial_required = initial_buffer_bytes(total, duration_ms);
+
         // 2. Calculate dynamic buffer sizes based on bit rate
         // We target:
         // - BUFFER_SIZE = 30 seconds of audio
@@ -115,17 +147,17 @@ impl StreamingDataSource {
             let fetch = (10_000.0 * bytes_per_ms) as usize;
 
             // Clamping to reasonable bounds:
-            // buffer_size: min 4MB, max 32MB
+            // buffer_size: min 2 MiB, max 16 MiB (unless startup needs more)
             // prefetch_trigger: min 256KB, max 4MB
             // prefetch_size: min 512KB, max 4MB
             (
-                buf_size.clamp(4 * 1024 * 1024, 32 * 1024 * 1024),
+                buffer_capacity(buf_size, initial_required),
                 trigger.clamp(256 * 1024, 4 * 1024 * 1024),
                 fetch.clamp(512 * 1024, 4 * 1024 * 1024),
             )
         } else {
             // Default constants if duration is missing
-            (8 * 1024 * 1024, 256 * 1024, 1024 * 1024)
+            (4 * 1024 * 1024, 256 * 1024, 1024 * 1024)
         };
 
         let initial_data = tokio::time::timeout(RANGE_TIMEOUT, resp.bytes())
@@ -185,14 +217,6 @@ impl StreamingDataSource {
             prefetch_size,
         };
 
-        let initial_required = duration_ms
-            .filter(|duration| *duration > 0)
-            .map(|duration| {
-                ((total as f64 * INITIAL_BUFFER_SECONDS as f64 * 1000.0 / duration as f64) as usize)
-                    .max(MIN_INITIAL_DATA)
-                    .min(total as usize)
-            })
-            .unwrap_or(MIN_INITIAL_DATA);
         if initial_required > initial_data_len {
             // The probe above already populated [0, initial_data_len). Continue
             // from its contiguous end instead of requesting the same bytes again.
